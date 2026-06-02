@@ -31,7 +31,7 @@ export default function LoginPage() {
         padding: '2.5rem', width: '100%', maxWidth: '400px'
       }}>
         <h1 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '0.5rem', textAlign: 'center' }}>
-          車販管理システム
+          Brain Base
         </h1>
         <p style={{ fontSize: '13px', color: '#888', textAlign: 'center', marginBottom: '2rem' }}>
           ログインしてください
