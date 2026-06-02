@@ -37,7 +37,8 @@ export default function EditVehiclePage() {
     if (images.length > 0) {
       const urls: string[] = []
       for (const file of images) {
-        const path = `${id}/${Date.now()}-${file.name}`
+        const ext = file.name.split('.').pop()
+        const path = `${id}/${Date.now()}.${ext}`
         const { error: uploadError } = await supabase.storage
           .from('vehicle-images')
           .upload(path, file)

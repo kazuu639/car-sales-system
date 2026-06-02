@@ -24,13 +24,20 @@ export default async function AdminPage() {
     <div style={{ padding: '2rem', maxWidth: '900px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <div>
-          <h1 style={{ fontSize: '22px', fontWeight: 700, margin: 0 }}>スタッフ管理</h1>
-          <p style={{ fontSize: '13px', color: '#888', margin: '4px 0 0' }}>{profiles?.length ?? 0}名登録</p>
+          <h1 style={{ fontSize: '22px', fontWeight: 700, margin: 0 }}>管理画面</h1>
+          <p style={{ fontSize: '13px', color: '#888', margin: '4px 0 0' }}>スタッフ・マスターデータの管理</p>
         </div>
-        <a href="/admin/new" style={{
-          padding: '10px 20px', background: '#0070f3', color: 'white',
-          borderRadius: '8px', textDecoration: 'none', fontSize: '14px', fontWeight: 500
-        }}>＋ スタッフ追加</a>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <a href="/admin/masters" style={{
+            padding: '10px 20px', background: 'white', color: '#555',
+            borderRadius: '8px', textDecoration: 'none', fontSize: '14px',
+            border: '1px solid #ddd', fontWeight: 500
+          }}>⚙️ マスターデータ</a>
+          <a href="/admin/new" style={{
+            padding: '10px 20px', background: '#0070f3', color: 'white',
+            borderRadius: '8px', textDecoration: 'none', fontSize: '14px', fontWeight: 500
+          }}>＋ スタッフ追加</a>
+        </div>
       </div>
 
       <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', overflow: 'hidden' }}>
