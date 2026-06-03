@@ -33,12 +33,9 @@ export default function QuotePreviewPage() {
     fetchAll()
   }, [id, quoteId])
 
-  const handleContract = async () => {
-    setLoading(true)
-    await supabase.from('negotiations').update({ status: '成約' }).eq('id', id as string)
-    await supabase.from('quotes').update({ status: '契約済' }).eq('id', quoteId)
-    router.push(`/negotiations/${id}`)
-  }
+  const handleContract = () => {
+  router.push(`/negotiations/${id}/contract`)
+}
 
   const handleFollowup = async () => {
     if (!followupDate) { alert('連絡日を設定してください'); return }
