@@ -95,7 +95,7 @@ export default function UserMenu() {
               {(profile.role === 'admin' || profile.role === 'manager') && (
                 <button onClick={() => { setOpen(false); router.push('/admin') }}
                   style={{ width: '100%', padding: '8px 12px', textAlign: 'left', background: 'none', border: 'none', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', color: '#0070f3' }}>
-                  ⚙️ スタッフ管理
+                  ⚙️ 管理画面
                 </button>
               )}
 
