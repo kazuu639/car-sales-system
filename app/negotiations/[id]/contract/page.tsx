@@ -53,22 +53,13 @@ export default function ContractPage() {
       payment_type: form.payment_type,
       down_payment: parseInt(form.down_payment) || 0,
       loan_company: form.loan_company,
-      status: '締結済',
+      status: '作成済',
       notes: form.notes,
     }]).select().single()
 
     if (error) { alert('エラー: ' + error.message); setLoading(false); return }
 
-    await supabase.from('negotiations').update({ status: '成約' }).eq('id', id as string)
-
-    const { data: delivery, error: de } = await supabase.from('deliveries').insert([{
-      contract_id: contract.id,
-      current_step: 1,
-    }]).select().single()
-
-    if (de) { alert('エラー: ' + de.message); setLoading(false); return }
-
-    router.push(`/deliveries/${delivery.id}`)
+    router.push(`/negotiations/${id}/contract/preview?contract_id=${contract.id}`)
   }
 
   if (!negotiation) return <div style={{ padding: '2rem' }}>読み込み中...</div>
@@ -103,7 +94,6 @@ export default function ContractPage() {
       </div>
 
       <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
           <div>
             <label style={labelStyle}>契約日 <span style={{ color: 'red' }}>*</span></label>
@@ -151,8 +141,8 @@ export default function ContractPage() {
         </div>
 
         <button onClick={handleSubmit} disabled={loading}
-          style={{ padding: '14px', background: '#00a86b', color: 'white', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}>
-          {loading ? '作成中...' : '✅ 契約を締結して納車管理へ'}
+          style={{ padding: '14px', background: '#1a1a2e', color: 'white', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}>
+          {loading ? '作成中...' : '📄 契約書プレビューへ'}
         </button>
       </div>
     </div>
