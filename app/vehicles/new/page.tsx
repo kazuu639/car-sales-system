@@ -25,7 +25,7 @@ export default function NewVehiclePage() {
   const [form, setForm] = useState({
     db_number: '', country_id: '', maker_id: '', model_id: '',
     year: '', mileage: '', shift: 'AT', color_id: '',
-    repair_history: false, inspection_date: '', chassis_number: '',
+    repair_history: false, inspection_date: '', chassis_number: '', car_number: '',
     stock_date: '', purchase_type: '買取', status: '在庫中',
     customer_id: '', dealer_id: '', auction_venue_id: '',
     purchase_price: '', body_price: '', total_price: '',
@@ -233,22 +233,25 @@ export default function NewVehiclePage() {
               </div>
             </div>
             <div style={grid2}>
-              <div>
-                <label style={lbl}>車台番号</label>
-                <input name="chassis_number" value={form.chassis_number} onChange={handleChange} style={inp} />
+                <div>
+                  <label style={lbl}>車台番号</label>
+                  <input name="chassis_number" value={form.chassis_number} onChange={handleChange} style={inp} />
+                </div>
+                <div>
+                  <label style={lbl}>車検満了日</label>
+                  <input type="date" name="inspection_date" value={form.inspection_date} onChange={handleChange} style={inp} />
+                </div>
               </div>
               <div>
-                <label style={lbl}>車検満了日</label>
-                <input type="date" name="inspection_date" value={form.inspection_date} onChange={handleChange} style={inp} />
+                <label style={lbl}>車両ナンバー</label>
+                <input name="car_number" value={form.car_number} onChange={handleChange} style={inp} placeholder="品川 300 あ 1234" />
               </div>
-            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <input type="checkbox" name="repair_history" checked={form.repair_history} onChange={handleChange} id="repair" />
               <label htmlFor="repair" style={{ fontSize: '14px' }}>修復歴あり</label>
             </div>
           </div>
         )}
-
         {/* Step 1: 仕入先 */}
         {step === 1 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

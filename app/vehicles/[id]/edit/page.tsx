@@ -129,7 +129,7 @@ export default function EditVehiclePage() {
         ['管理番号', 'db_number', 'text'], ['車種', 'car_name', 'text'],
         ['年式', 'year', 'number'], ['走行距離 (km)', 'mileage', 'number'],
         ['シフト', 'shift', 'text'], ['色', 'color', 'text'],
-        ['車台番号', 'chassis_number', 'text'], ['車検満了日', 'inspection_date', 'date'],
+        ['車台番号', 'chassis_number', 'text'], ['車両ナンバー', 'car_number', 'text'], ['車検満了日', 'inspection_date', 'date'],
         ['入庫日', 'stock_date', 'date'], ['契約日', 'contract_date', 'date'],
         ['納車日', 'delivery_date', 'date'], ['仕入金額', 'purchase_price', 'number'],
         ['車体価格', 'body_price', 'number'], ['支払総額', 'total_price', 'number'],
