@@ -17,7 +17,7 @@ export default function LoginPage() {
     if (error) {
       setError('メールアドレスまたはパスワードが間違っています')
     } else {
-      window.location.href = '/vehicles'
+      window.location.href = '/'
     }
   }
 

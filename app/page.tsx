@@ -35,7 +35,7 @@ export default function DashboardPage() {
     { label: '納車管理', href: '/deliveries', icon: '🚚', color: '#fce8e6' },
     { label: 'DATA BOX', href: '/databox', icon: '📁', color: '#f3e8fd' },
     { label: '顧客リスト', href: '/customers', icon: '👥', color: '#e8f4fd' },
-    { label: '業者', href: '/dealers', icon: '🏢', color: '#f5f5f5' },
+    { label: '業者リスト', href: '/dealers', icon: '🏢', color: '#f5f5f5' },
     { label: '管理画面', href: '/admin', icon: '⚙️', color: '#f5f5f5' },
   ]
 

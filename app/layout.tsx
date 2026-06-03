@@ -24,6 +24,7 @@ export default function RootLayout({
               Brain Base
             </a>
             <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
+              <a href="/" style={{ fontSize: '14px', color: '#555', textDecoration: 'none' }}>TOP</a>
               <a href="/inquiries" style={{ fontSize: '14px', color: '#555', textDecoration: 'none' }}>問合</a>
               <a href="/negotiations" style={{ fontSize: '14px', color: '#555', textDecoration: 'none' }}>商談</a>
               <a href="/vehicles" style={{ fontSize: '14px', color: '#555', textDecoration: 'none' }}>在庫管理</a>
