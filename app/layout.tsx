@@ -29,8 +29,8 @@ export default function RootLayout({
               <a href="/vehicles/new" style={{ fontSize: '14px', color: '#555', textDecoration: 'none' }}>車両登録</a>
               <a href="/negotiations" style={{ fontSize: '14px', color: '#555', textDecoration: 'none' }}>商談</a>
               <a href="/customers" style={{ fontSize: '14px', color: '#555', textDecoration: 'none' }}>顧客</a>
-              <a href="/dealers" style={{ fontSize: '14px', color: '#555', textDecoration: 'none' }}>業者</a>
               <a href="/delivery" style={{ fontSize: '14px', color: '#555', textDecoration: 'none' }}>納車管理</a>
+              <a href="/admin/company" style={{ fontSize: '14px', color: '#555', textDecoration: 'none' }}>会社設定</a>
               <UserMenu />
             </div>
           </nav>

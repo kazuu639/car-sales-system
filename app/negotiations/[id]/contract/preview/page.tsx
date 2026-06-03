@@ -14,6 +14,7 @@ export default function ContractPreviewPage() {
   const [quote, setQuote] = useState<any>(null)
   const [vehicle, setVehicle] = useState<any>(null)
   const [customer, setCustomer] = useState<any>(null)
+  const [company, setCompany] = useState<any>(null)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -34,6 +35,9 @@ export default function ContractPreviewPage() {
         .limit(1)
         .single()
       setQuote(q)
+
+      const { data: co } = await supabase.from('companies').select('*').limit(1).single()
+      setCompany(co)
     }
     fetchAll()
   }, [id, contractId])
@@ -95,11 +99,13 @@ export default function ContractPreviewPage() {
             <span>契約日　{today}</span>
             <span>契約書番号　{contractNo}</span>
           </div>
-          <div style={{ fontSize: '11pt', fontWeight: 700 }}>Brain Base</div>
+          <div style={{ fontSize: '11pt', fontWeight: 700 }}>{company?.name ?? 'Brain Base'}</div>
           <div style={{ fontSize: '7.5pt', color: '#555', lineHeight: 1.6 }}>
-            <div>〒000-0000 住所を設定してください</div>
-            <div>TEL 000-000-0000　FAX 000-000-0000</div>
-            <div>振込先　銀行情報を設定してください</div>
+            <div>〒{company?.zip_code ?? ''} {company?.address ?? '住所を設定してください'}</div>
+            <div>TEL {company?.tel ?? '000-000-0000'}　FAX {company?.fax ?? ''}</div>
+            <div>事業者登録番号 {company?.tax_number ?? ''}</div>
+            <div>振込先　{company?.bank_name ?? ''} {company?.bank_branch ?? ''} {company?.bank_type ?? ''} {company?.bank_account ?? ''}</div>
+            <div>{company?.bank_holder ?? ''}</div>
           </div>
         </div>
       </div>
@@ -294,7 +300,7 @@ export default function ContractPreviewPage() {
           <div style={s.sectionTitle}>契約書発行情報</div>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <tbody>
-              <tr><td style={s.tdLabel}>契約書発行店舗</td><td style={s.td}>Brain Base</td></tr>
+              <tr><td style={s.tdLabel}>契約書発行店舗</td><td style={s.td}>{company?.name ?? 'Brain Base'}</td></tr>
               <tr><td style={s.tdLabel}>契約担当</td><td style={s.td}>　</td></tr>
             </tbody>
           </table>
