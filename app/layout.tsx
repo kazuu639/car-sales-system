@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import UserMenu from '@/components/UserMenu'
 import Link from 'next/link'
+import SidebarLogo from '@/components/SidebarLogo'
 
 type SearchResult = {
   id: string
@@ -157,20 +158,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           flexShrink: 0,
         }}>
           {/* ロゴ＋トグル */}
-          <div style={{ padding: '14px 12px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: '56px' }}>
-            {!collapsed && (
-              <div style={{ overflow: 'hidden' }}>
-                <div style={{ fontSize: '14px', fontWeight: 700, color: '#111', whiteSpace: 'nowrap' }}>Brain Base</div>
-                <div style={{ fontSize: '10px', color: '#aaa', whiteSpace: 'nowrap' }}>車販管理システム</div>
-              </div>
-            )}
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', minHeight: '56px' }}>
+            {!collapsed && <SidebarLogo collapsed={collapsed} />}
             <button onClick={() => setCollapsed(!collapsed)} style={{
               width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #eee',
               background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', flexShrink: 0, marginLeft: collapsed ? 'auto' : '0', marginRight: collapsed ? 'auto' : '0',
+              justifyContent: 'center', flexShrink: 0,
             }} aria-label="サイドバー切替">
               <i className={`ti ${collapsed ? 'ti-layout-sidebar-left-expand' : 'ti-layout-sidebar-left-collapse'}`} style={{ fontSize: '16px', color: '#888' }} aria-hidden="true" />
             </button>
+            {collapsed && <SidebarLogo collapsed={collapsed} />}
           </div>
 
           {/* 検索ボタン */}
