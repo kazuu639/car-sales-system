@@ -7,137 +7,219 @@ export default function DashboardPage() {
   const [vehicles, setVehicles] = useState<any[]>([])
   const [negotiations, setNegotiations] = useState<any[]>([])
   const [deliveries, setDeliveries] = useState<any[]>([])
+  const [inquiries, setInquiries] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     Promise.all([
       supabase.from('vehicles').select('*, master_makers(name), master_models(name)').order('created_at', { ascending: false }),
       supabase.from('negotiations').select('*, customers(氏名), vehicles(master_makers(name), master_models(name))').order('created_at', { ascending: false }).limit(5),
       supabase.from('deliveries').select('*, contracts(*, negotiations(*, customers(氏名), vehicles(master_makers(name), master_models(name))))').order('created_at', { ascending: false }).limit(5),
-    ]).then(([v, n, d]) => {
+      supabase.from('inquiries').select('*').eq('status', 'new').order('created_at', { ascending: false }).limit(5),
+    ]).then(([v, n, d, i]) => {
       setVehicles(v.data ?? [])
       setNegotiations(n.data ?? [])
       setDeliveries(d.data ?? [])
+      setInquiries(i.data ?? [])
+      setLoading(false)
     })
   }, [])
 
-  const total = vehicles.length
   const inStock = vehicles.filter(v => v.status === '在庫中').length
-  const inDeal = vehicles.filter(v => v.status === '商談中').length
-  const sold = vehicles.filter(v => v.status === '売約済' || v.status === '納車済').length
+  const inDeal  = vehicles.filter(v => v.status === '商談中').length
+  const sold    = vehicles.filter(v => v.status === '売約済' || v.status === '納車済').length
   const totalSales = vehicles
     .filter(v => v.status === '売約済' || v.status === '納車済')
     .reduce((sum, v) => sum + (v.body_price ?? 0), 0)
+  const newInquiries = inquiries.length
 
-  const menus = [
-    { label: '問合', href: '/inquiries', icon: '📨', color: '#e8f0fe' },
-    { label: '商談', href: '/negotiations', icon: '📝', color: '#fff3e0' },
-    { label: '在庫管理', href: '/vehicles', icon: '🚗', color: '#e6f4ea' },
-    { label: '納車管理', href: '/deliveries', icon: '🚚', color: '#fce8e6' },
-    { label: 'DATA BOX', href: '/databox', icon: '📁', color: '#f3e8fd' },
-    { label: '顧客リスト', href: '/customers', icon: '👥', color: '#e8f4fd' },
-    { label: '業者リスト', href: '/dealers', icon: '🏢', color: '#f5f5f5' },
-    { label: '管理画面', href: '/admin', icon: '⚙️', color: '#f5f5f5' },
-  ]
+  const today = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })
 
   const stepLabel = (step: number) => {
     const steps = ['契約締結', 'ローン申込', 'OK番号取得', '書類収集', '登録申請', '入金確認', '整備仕上', '納車完了']
     return steps[Math.min(step - 1, 7)] ?? '—'
   }
 
+  const statusBadge = (status: string) => {
+    const map: Record<string, { bg: string; color: string }> = {
+      '商談中': { bg: '#fff3e0', color: '#e65100' },
+      '見積済': { bg: '#e8f0fe', color: '#1a73e8' },
+      '成約':   { bg: '#e6f4ea', color: '#1e7e34' },
+      '失注':   { bg: '#f1f3f4', color: '#5f6368' },
+    }
+    const s = map[status] ?? { bg: '#f1f3f4', color: '#5f6368' }
+    return (
+      <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', fontWeight: 500, background: s.bg, color: s.color, whiteSpace: 'nowrap' }}>
+        {status}
+      </span>
+    )
+  }
+
+  const kpis = [
+    {
+      label: '在庫台数',
+      value: `${inStock}`,
+      unit: '台',
+      sub: `総登録 ${vehicles.length}台`,
+      icon: 'ti-car',
+      color: '#1a73e8',
+      bg: '#e8f0fe',
+    },
+    {
+      label: '商談中',
+      value: `${inDeal}`,
+      unit: '件',
+      sub: '進行中の商談',
+      icon: 'ti-file-text',
+      color: '#e65100',
+      bg: '#fff3e0',
+    },
+    {
+      label: '新規問合',
+      value: `${newInquiries}`,
+      unit: '件',
+      sub: '未対応の問合',
+      icon: 'ti-message-circle',
+      color: '#c5221f',
+      bg: '#fce8e6',
+    },
+    {
+      label: '売上合計',
+      value: totalSales >= 10000 ? `${(totalSales / 10000).toFixed(0)}万` : totalSales.toLocaleString(),
+      unit: totalSales >= 10000 ? '円' : '円',
+      sub: '車体価格ベース',
+      icon: 'ti-chart-bar',
+      color: '#1e7e34',
+      bg: '#e6f4ea',
+    },
+  ]
+
   return (
-    <div style={{ padding: '2rem', maxWidth: '1100px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '22px', fontWeight: 700, margin: 0 }}>ダッシュボード</h1>
-        <p style={{ fontSize: '13px', color: '#888', margin: '4px 0 0' }}>
-          {new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
-        </p>
+    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
+
+      {/* ヘッダー */}
+      <div style={{ marginBottom: '2rem' }}>
+        <h1 style={{ fontSize: '22px', fontWeight: 700, margin: 0, color: '#111' }}>ダッシュボード</h1>
+        <p style={{ fontSize: '13px', color: '#888', margin: '4px 0 0' }}>{today}</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '1.5rem' }}>
-        {[
-          { label: '在庫台数', value: `${inStock}台`, sub: `総登録 ${total}台`, color: '#e6f4ea', textColor: '#1e7e34' },
-          { label: '商談中', value: `${inDeal}件`, sub: '進行中の商談', color: '#fff3e0', textColor: '#e65100' },
-          { label: '今月の販売', value: `${sold}台`, sub: '売約済・納車済', color: '#e8f0fe', textColor: '#1a73e8' },
-          { label: '売上合計', value: `¥${totalSales.toLocaleString()}`, sub: '車体価格ベース', color: '#f3e8fd', textColor: '#6a1b9a' },
-        ].map((m, i) => (
-          <div key={i} style={{ background: m.color, border: '1px solid #eee', borderRadius: '12px', padding: '16px' }}>
-            <div style={{ fontSize: '12px', color: '#888', marginBottom: '8px' }}>{m.label}</div>
-            <div style={{ fontSize: '22px', fontWeight: 700, color: m.textColor }}>{m.value}</div>
-            <div style={{ fontSize: '11px', color: '#aaa', marginTop: '4px' }}>{m.sub}</div>
+      {/* KPIカード */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '2rem' }}>
+        {kpis.map((k, i) => (
+          <div key={i} style={{ background: 'white', border: '1px solid #eee', borderRadius: '12px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '13px', color: '#888', fontWeight: 500 }}>{k.label}</span>
+              <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: k.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <i className={`ti ${k.icon}`} style={{ fontSize: '16px', color: k.color }} aria-hidden="true" />
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+              <span style={{ fontSize: '28px', fontWeight: 700, color: '#111', lineHeight: 1 }}>{loading ? '—' : k.value}</span>
+              <span style={{ fontSize: '13px', color: '#888' }}>{k.unit}</span>
+            </div>
+            <div style={{ fontSize: '12px', color: '#aaa' }}>{k.sub}</div>
           </div>
         ))}
       </div>
 
-      <div style={{ background: 'white', border: '1px solid #eee', borderRadius: '12px', padding: '1.5rem', marginBottom: '1.5rem' }}>
-        <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '1rem' }}>メニュー</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '10px' }}>
-          {menus.map((m, i) => (
-            <Link key={i} href={m.href} style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
-              padding: '12px 8px', background: m.color, borderRadius: '10px',
-              textDecoration: 'none', color: '#333', border: '1px solid #eee'
-            }}>
-              <span style={{ fontSize: '24px' }}>{m.icon}</span>
-              <span style={{ fontSize: '11px', fontWeight: 500, textAlign: 'center' }}>{m.label}</span>
-            </Link>
-          ))}
-        </div>
-      </div>
+      {/* メインコンテンツ */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-        <div style={{ background: 'white', border: '1px solid #eee', borderRadius: '12px', padding: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <div style={{ fontSize: '14px', fontWeight: 600 }}>最近の商談</div>
+        {/* 最近の商談 */}
+        <div style={{ background: 'white', border: '1px solid #eee', borderRadius: '12px', padding: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <i className="ti ti-file-text" style={{ fontSize: '16px', color: '#888' }} aria-hidden="true" />
+              <span style={{ fontSize: '14px', fontWeight: 600, color: '#111' }}>最近の商談</span>
+            </div>
             <Link href="/negotiations" style={{ fontSize: '12px', color: '#0070f3', textDecoration: 'none' }}>すべて見る →</Link>
           </div>
-          {negotiations.length === 0 && <p style={{ fontSize: '13px', color: '#aaa', textAlign: 'center' }}>商談データがありません</p>}
-          {negotiations.map((n, i) => (
-            <Link key={i} href={`/negotiations/${n.id}`} style={{
-              display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0',
-              borderBottom: i < negotiations.length - 1 ? '1px solid #f0f0f0' : 'none', textDecoration: 'none'
+          {loading ? (
+            <div style={{ padding: '2rem', textAlign: 'center', color: '#aaa', fontSize: '13px' }}>読み込み中...</div>
+          ) : negotiations.length === 0 ? (
+            <div style={{ padding: '2rem', textAlign: 'center', color: '#aaa', fontSize: '13px' }}>商談データがありません</div>
+          ) : negotiations.map((n, i) => (
+            <Link key={n.id} href={`/negotiations/${n.id}`} style={{
+              display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0',
+              borderBottom: i < negotiations.length - 1 ? '1px solid #f5f5f5' : 'none', textDecoration: 'none',
             }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '13px', fontWeight: 500, color: '#111' }}>{n.customers?.氏名 ?? '未設定'}</div>
-                <div style={{ fontSize: '11px', color: '#888' }}>{n.vehicles?.master_makers?.name} {n.vehicles?.master_models?.name}</div>
+              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600, color: '#555', flexShrink: 0 }}>
+                {(n.customers?.氏名 ?? '?')[0]}
               </div>
-              <span style={{
-                fontSize: '10px', padding: '2px 8px', borderRadius: '20px', flexShrink: 0,
-                background: n.status === '商談中' ? '#fff3e0' : n.status === '成約' ? '#e6f4ea' : '#f1f3f4',
-                color: n.status === '商談中' ? '#e65100' : n.status === '成約' ? '#1e7e34' : '#5f6368',
-              }}>{n.status}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '13px', fontWeight: 500, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.customers?.氏名 ?? '未設定'}</div>
+                <div style={{ fontSize: '11px', color: '#aaa', marginTop: '2px' }}>{n.vehicles?.master_makers?.name} {n.vehicles?.master_models?.name}</div>
+              </div>
+              {statusBadge(n.status)}
             </Link>
           ))}
         </div>
 
-        <div style={{ background: 'white', border: '1px solid #eee', borderRadius: '12px', padding: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <div style={{ fontSize: '14px', fontWeight: 600 }}>納車管理</div>
+        {/* 納車進捗 */}
+        <div style={{ background: 'white', border: '1px solid #eee', borderRadius: '12px', padding: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <i className="ti ti-truck" style={{ fontSize: '16px', color: '#888' }} aria-hidden="true" />
+              <span style={{ fontSize: '14px', fontWeight: 600, color: '#111' }}>納車進捗</span>
+            </div>
             <Link href="/deliveries" style={{ fontSize: '12px', color: '#0070f3', textDecoration: 'none' }}>すべて見る →</Link>
           </div>
-          {deliveries.length === 0 && <p style={{ fontSize: '13px', color: '#aaa', textAlign: 'center' }}>納車データがありません</p>}
-          {deliveries.map((d, i) => {
+          {loading ? (
+            <div style={{ padding: '2rem', textAlign: 'center', color: '#aaa', fontSize: '13px' }}>読み込み中...</div>
+          ) : deliveries.length === 0 ? (
+            <div style={{ padding: '2rem', textAlign: 'center', color: '#aaa', fontSize: '13px' }}>納車データがありません</div>
+          ) : deliveries.map((d, i) => {
             const neg = d.contracts?.negotiations
             const customer = neg?.customers
             const vehicle = neg?.vehicles
+            const done = d.current_step >= 8
             return (
-              <Link key={i} href={`/deliveries/${d.id}`} style={{
-                display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0',
-                borderBottom: i < deliveries.length - 1 ? '1px solid #f0f0f0' : 'none', textDecoration: 'none'
+              <Link key={d.id} href={`/deliveries/${d.id}`} style={{
+                display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0',
+                borderBottom: i < deliveries.length - 1 ? '1px solid #f5f5f5' : 'none', textDecoration: 'none',
               }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '13px', fontWeight: 500, color: '#111' }}>{customer?.氏名 ?? '—'}</div>
-                  <div style={{ fontSize: '11px', color: '#888' }}>{vehicle?.master_makers?.name} {vehicle?.master_models?.name}</div>
+                <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: done ? '#e6f4ea' : '#fff3e0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <i className={`ti ${done ? 'ti-check' : 'ti-clock'}`} style={{ fontSize: '14px', color: done ? '#1e7e34' : '#e65100' }} aria-hidden="true" />
                 </div>
-                <span style={{
-                  fontSize: '10px', padding: '2px 8px', borderRadius: '20px', flexShrink: 0,
-                  background: d.current_step >= 8 ? '#e6f4ea' : '#fff3e0',
-                  color: d.current_step >= 8 ? '#1e7e34' : '#e65100',
-                }}>Step {d.current_step}　{stepLabel(d.current_step)}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '13px', fontWeight: 500, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{customer?.氏名 ?? '—'}</div>
+                  <div style={{ fontSize: '11px', color: '#aaa', marginTop: '2px' }}>{vehicle?.master_makers?.name} {vehicle?.master_models?.name}</div>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontSize: '10px', color: '#aaa' }}>Step {d.current_step}</div>
+                  <div style={{ fontSize: '11px', color: done ? '#1e7e34' : '#e65100', fontWeight: 500 }}>{stepLabel(d.current_step)}</div>
+                </div>
               </Link>
             )
           })}
         </div>
       </div>
+
+      {/* 新規問合 */}
+      {inquiries.length > 0 && (
+        <div style={{ background: 'white', border: '1px solid #eee', borderRadius: '12px', padding: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <i className="ti ti-message-circle" style={{ fontSize: '16px', color: '#c5221f' }} aria-hidden="true" />
+              <span style={{ fontSize: '14px', fontWeight: 600, color: '#111' }}>未対応の問合</span>
+              <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '20px', background: '#fce8e6', color: '#c5221f', fontWeight: 600 }}>{inquiries.length}件</span>
+            </div>
+            <Link href="/inquiries" style={{ fontSize: '12px', color: '#0070f3', textDecoration: 'none' }}>すべて見る →</Link>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px' }}>
+            {inquiries.map(inq => (
+              <Link key={inq.id} href="/inquiries" style={{
+                display: 'block', padding: '12px', border: '1px solid #fce8e6', borderRadius: '8px',
+                textDecoration: 'none', background: '#fffafa',
+              }}>
+                <div style={{ fontSize: '13px', fontWeight: 500, color: '#111', marginBottom: '4px' }}>{inq.customer_name}</div>
+                <div style={{ fontSize: '11px', color: '#aaa' }}>{inq.car_interest && `🚗 ${inq.car_interest}`}</div>
+                <div style={{ fontSize: '11px', color: '#aaa', marginTop: '2px' }}>{inq.inquiry_date}</div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
