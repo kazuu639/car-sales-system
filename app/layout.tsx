@@ -21,6 +21,7 @@ const NAV_ITEMS = [
 { label: '在庫管理',       href: '/vehicles',     icon: 'ti-car'              },
 { label: '納車管理',       href: '/deliveries',   icon: 'ti-truck'            },
 { label: 'カレンダー',     href: '/calendar',     icon: 'ti-calendar'         },
+{ label: '会計',     href: '/accounting', icon: 'ti-cash'     },
 ]
 const NAV_ITEMS2 = [
 { label: '顧客',      href: '/customers', icon: 'ti-users'       },

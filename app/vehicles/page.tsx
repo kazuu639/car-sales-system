@@ -1,4 +1,5 @@
 'use client'
+import React from 'react'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
@@ -138,9 +139,9 @@ export default function VehiclesPage() {
             </thead>
             <tbody>
               {filtered.map((v: any, i) => (
-                <>
+                <React.Fragment key={v.id}>
                   {/* メイン行 */}
-                  <tr key={v.id}
+                  <tr
                     onClick={() => toggleExpand(v.id)}
                     style={{
                       borderBottom: expandedId === v.id ? 'none' : '1px solid #f0f0f0',
@@ -249,7 +250,7 @@ export default function VehiclesPage() {
                       </td>
                     </tr>
                   )}
-                </>
+                </React.Fragment>
               ))}
             </tbody>
           </table>
