@@ -15,11 +15,12 @@ type SearchResult = {
 }
 
 const NAV_ITEMS = [
-  { label: 'ダッシュボード', href: '/',             icon: 'ti-layout-dashboard' },
-  { label: '問合',           href: '/inquiries',    icon: 'ti-message-circle'   },
-  { label: '商談',           href: '/negotiations', icon: 'ti-file-text'        },
-  { label: '在庫管理',       href: '/vehicles',     icon: 'ti-car'              },
-  { label: '納車管理',       href: '/deliveries',   icon: 'ti-truck'            },
+{ label: 'ダッシュボード', href: '/',             icon: 'ti-layout-dashboard' },
+{ label: '問合',           href: '/inquiries',    icon: 'ti-message-circle'   },
+{ label: '商談',           href: '/negotiations', icon: 'ti-file-text'        },
+{ label: '在庫管理',       href: '/vehicles',     icon: 'ti-car'              },
+{ label: '納車管理',       href: '/deliveries',   icon: 'ti-truck'            },
+{ label: 'カレンダー',     href: '/calendar',     icon: 'ti-calendar'         },
 ]
 const NAV_ITEMS2 = [
 { label: '顧客',      href: '/customers', icon: 'ti-users'       },
