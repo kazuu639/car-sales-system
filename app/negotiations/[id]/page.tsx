@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import { useProfile } from '@/hooks/useProfile'
 
 const SOURCES = [
   { value: 'carsensor', label: 'カーセンサー', color: '#c0392b', bg: '#fde8e8' },
@@ -22,6 +23,7 @@ const SOURCE_MAP = Object.fromEntries(SOURCES.map(s => [s.value, s]))
 export default function NegotiationDetailPage() {
   const { id } = useParams()
   const router = useRouter()
+  const { isAdmin } = useProfile()
   const [negotiation, setNegotiation] = useState<any>(null)
   const [negVehicles, setNegVehicles] = useState<any[]>([])
   const [allVehicles, setAllVehicles] = useState<any[]>([])
@@ -133,6 +135,15 @@ export default function NegotiationDetailPage() {
               <button onClick={() => handleStatusChange('失注')} disabled={loading}
                 style={{ padding: '8px 16px', background: 'white', color: '#e53e3e', border: '1px solid #e53e3e', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}>
                 失注
+              </button>
+            )}
+            {isAdmin && (
+              <button onClick={async () => {
+                if (!confirm('この商談を削除BOXに移動しますか？')) return
+                await supabase.from('negotiations').update({ deleted_at: new Date().toISOString() }).eq('id', id as string)
+                window.location.href = '/negotiations'
+              }} style={{ padding: '8px 16px', background: '#fff5f5', color: '#e53e3e', borderRadius: '8px', border: '1px solid #fce8e6', fontSize: '13px', cursor: 'pointer' }}>
+                🗑 削除
               </button>
             )}
           </div>

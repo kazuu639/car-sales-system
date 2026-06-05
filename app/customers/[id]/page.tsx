@@ -3,9 +3,11 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import { useProfile } from '@/hooks/useProfile'
 
 export default function CustomerDetailPage() {
   const { id } = useParams()
+  const { isAdmin } = useProfile()
   const [customer, setCustomer] = useState<any>(null)
   const [negotiations, setNegotiations] = useState<any[]>([])
   const [vehicles, setVehicles] = useState<any[]>([])
@@ -76,6 +78,16 @@ export default function CustomerDetailPage() {
           <Link href={`/customers/${id}/edit`} style={{ padding: '8px 16px', background: '#0070f3', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>
             編集
           </Link>
+          {isAdmin && (
+            <button onClick={async () => {
+              if (!confirm('この顧客を削除BOXに移動しますか？\n関連する商談も移動されます。')) return
+              await supabase.from('customers').update({ deleted_at: new Date().toISOString() }).eq('id', id as string)
+              await supabase.from('negotiations').update({ deleted_at: new Date().toISOString() }).eq('customer_id', id as string)
+              window.location.href = '/customers'
+            }} style={{ padding: '8px 16px', background: '#fff5f5', color: '#e53e3e', borderRadius: '8px', border: '1px solid #fce8e6', fontSize: '13px', cursor: 'pointer' }}>
+              🗑 削除
+            </button>
+          )}
         </div>
       </div>
 

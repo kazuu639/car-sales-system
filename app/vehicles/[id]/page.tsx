@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import { useProfile } from '@/hooks/useProfile'
 
 const CATEGORIES = [
   { value: '1-1', label: '仕入金額',     direction: 'out', color: '#e53e3e', bg: '#fff5f5' },
@@ -36,6 +37,7 @@ const STATUS_COLOR: Record<string, { bg: string; color: string }> = {
 
 export default function VehicleDetailPage() {
   const { id } = useParams()
+  const { isAdmin } = useProfile()
   const [v, setV] = useState<any>(null)
   const [mainImg, setMainImg] = useState(0)
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -70,6 +72,12 @@ export default function VehicleDetailPage() {
   }
 
   const toggleCheck = (key: string) => updateVehicle({ [key]: !v[key] })
+
+  const handleDelete = async () => {
+    if (!confirm('この車両を削除BOXに移動しますか？\n関連する商談・財務明細も移動されます。')) return
+    await supabase.from('vehicles').update({ deleted_at: new Date().toISOString() }).eq('id', id as string)
+    window.location.href = '/vehicles'
+  }
 
   const handleSaveTx = async () => {
     if (!txForm.amount) return alert('金額を入力してください')
@@ -117,16 +125,6 @@ export default function VehicleDetailPage() {
     </button>
   )
 
-  const WebBadge = ({ label, key2, icon }: { label: string; key2: string; icon: string }) => (
-    <button onClick={() => toggleCheck(key2)} style={{
-      padding: '6px 14px', borderRadius: '8px', border: `1px solid ${v[key2] ? '#1a73e8' : '#ddd'}`, fontSize: '12px', fontWeight: 500, cursor: 'pointer',
-      background: v[key2] ? '#e8f0fe' : 'white',
-      color: v[key2] ? '#1a73e8' : '#888',
-    }}>
-      {icon} {label} {v[key2] ? '✓' : ''}
-    </button>
-  )
-
   const TABS = ['仕入', '在庫', '契約', '登録', '財務'] as const
 
   return (
@@ -135,9 +133,7 @@ export default function VehicleDetailPage() {
       {/* ===== 上部統一ヘッダー ===== */}
       <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '16px 20px', marginBottom: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          {/* 左：車両情報 */}
           <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-            {/* サムネイル */}
             <div style={{ width: '100px', height: '75px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0, border: '1px solid #eee', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px' }}>
               {v.image_urls?.length > 0
                 ? <img src={v.image_urls[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -163,15 +159,18 @@ export default function VehicleDetailPage() {
             </div>
           </div>
 
-          {/* 右：アクション */}
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <Link href="/vehicles" style={{ padding: '7px 14px', background: '#f1f3f4', color: '#555', borderRadius: '8px', textDecoration: 'none', fontSize: '13px' }}>← 一覧</Link>
             <Link href={`/negotiations/new?vehicle=${v.id}`} style={{ padding: '7px 14px', background: '#00a86b', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>商談登録</Link>
             <Link href={`/vehicles/${v.id}/edit`} style={{ padding: '7px 14px', background: '#0070f3', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>編集</Link>
+            {isAdmin && (
+              <button onClick={handleDelete} style={{ padding: '7px 14px', background: '#fff5f5', color: '#e53e3e', borderRadius: '8px', border: '1px solid #fce8e6', fontSize: '13px', cursor: 'pointer' }}>
+                🗑 削除
+              </button>
+            )}
           </div>
         </div>
 
-        {/* 仕入ステータスバー */}
         <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #f0f0f0' }}>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
             <span style={{ fontSize: '11px', color: '#888', fontWeight: 600 }}>仕入</span>
@@ -188,7 +187,7 @@ export default function VehicleDetailPage() {
         </div>
       </div>
 
-      {/* ===== タブ ===== */}
+      {/* タブ */}
       <div style={{ display: 'flex', gap: '2px', marginBottom: '16px', background: '#f1f3f4', borderRadius: '10px', padding: '4px', width: 'fit-content' }}>
         {TABS.map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
@@ -200,7 +199,6 @@ export default function VehicleDetailPage() {
         ))}
       </div>
 
-      {/* ===== 仕入情報タブ ===== */}
       {tab === '仕入' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px' }}>
@@ -227,10 +225,8 @@ export default function VehicleDetailPage() {
         </div>
       )}
 
-      {/* ===== 在庫情報タブ ===== */}
       {tab === '在庫' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* 物件情報 */}
           <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px' }}>
             <h3 style={{ fontSize: '14px', fontWeight: 600, margin: '0 0 16px', color: '#111' }}>物件情報</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 24px' }}>
@@ -253,17 +249,15 @@ export default function VehicleDetailPage() {
               </div>
             </div>
           </div>
-
-          {/* 販売価格 */}
           <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px' }}>
             <h3 style={{ fontSize: '14px', fontWeight: 600, margin: '0 0 16px', color: '#111' }}>販売価格（デフォルト見積）</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
               {[
-                { label: '車体価格', key: 'list_price', value: v.list_price ?? v.body_price },
-                { label: '諸費用', key: 'misc_fee', value: v.misc_fee },
-                { label: '支払総額', key: 'total_payment', value: v.total_payment ?? v.total_price },
+                { label: '車体価格', value: v.list_price ?? v.body_price },
+                { label: '諸費用', value: v.misc_fee },
+                { label: '支払総額', value: v.total_payment ?? v.total_price },
               ].map(f => (
-                <div key={f.key} style={{ background: '#f8f9fa', borderRadius: '8px', padding: '14px' }}>
+                <div key={f.label} style={{ background: '#f8f9fa', borderRadius: '8px', padding: '14px' }}>
                   <div style={{ fontSize: '12px', color: '#888', marginBottom: '6px' }}>{f.label}</div>
                   <div style={{ fontSize: '20px', fontWeight: 700, color: '#111' }}>
                     {f.value ? '¥' + f.value.toLocaleString() : '—'}
@@ -272,8 +266,6 @@ export default function VehicleDetailPage() {
               ))}
             </div>
           </div>
-
-          {/* WEB用写真 */}
           <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h3 style={{ fontSize: '14px', fontWeight: 600, margin: 0, color: '#111' }}>WEB用写真</h3>
@@ -301,7 +293,6 @@ export default function VehicleDetailPage() {
         </div>
       )}
 
-      {/* ===== 契約情報タブ ===== */}
       {tab === '契約' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px' }}>
@@ -325,7 +316,6 @@ export default function VehicleDetailPage() {
         </div>
       )}
 
-      {/* ===== 登録情報タブ ===== */}
       {tab === '登録' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {[
@@ -350,15 +340,13 @@ export default function VehicleDetailPage() {
         </div>
       )}
 
-      {/* ===== 財務タブ ===== */}
       {tab === '財務' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* 粗利サマリー */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
             {[
-              { label: '総入金', value: totalIn, color: '#1e7e34', bg: '#e6f4ea' },
-              { label: '総出金', value: totalOut, color: '#e53e3e', bg: '#fce8e6' },
-              { label: '確定粗利', value: grossProfit, color: grossProfit >= 0 ? '#1a73e8' : '#e65100', bg: grossProfit >= 0 ? '#e8f0fe' : '#fff3e0' },
+              { label: '総入金', value: totalIn, color: '#1e7e34' },
+              { label: '総出金', value: totalOut, color: '#e53e3e' },
+              { label: '確定粗利', value: grossProfit, color: grossProfit >= 0 ? '#1a73e8' : '#e65100' },
             ].map(k => (
               <div key={k.label} style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px', textAlign: 'center' }}>
                 <div style={{ fontSize: '12px', color: '#888', marginBottom: '8px' }}>{k.label}</div>
@@ -368,8 +356,6 @@ export default function VehicleDetailPage() {
               </div>
             ))}
           </div>
-
-          {/* 明細 */}
           <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h3 style={{ fontSize: '14px', fontWeight: 600, margin: 0 }}>入出金明細</h3>
@@ -423,7 +409,6 @@ export default function VehicleDetailPage() {
         </div>
       )}
 
-      {/* ===== 明細追加モーダル ===== */}
       {showTxModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: 'white', borderRadius: '16px', width: '100%', maxWidth: '480px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
