@@ -37,6 +37,7 @@ export default function VehiclesPage() {
       const { data } = await supabase
         .from('vehicles')
         .select('*, master_models(name), master_makers(name), master_colors(name)')
+        .is('deleted_at', null)
         .order(sortKey, { ascending: sortAsc })
       setVehicles(data ?? [])
       const makerSet = new Map()

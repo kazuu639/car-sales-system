@@ -29,7 +29,6 @@ const NAV_ITEMS2 = [
 { label: 'DATA BOX',  href: '/databox',   icon: 'ti-folder'      },
 { label: 'レポート',  href: '/reports',   icon: 'ti-chart-bar'   },
 { label: '設定', href: '/settings', icon: 'ti-tool' },
-{ label: '管理画面',  href: '/admin',     icon: 'ti-settings'    },
 ]
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
