@@ -137,15 +137,6 @@ export default function NegotiationDetailPage() {
                 失注
               </button>
             )}
-            {isAdmin && (
-              <button onClick={async () => {
-                if (!confirm('この商談を削除BOXに移動しますか？')) return
-                await supabase.from('negotiations').update({ deleted_at: new Date().toISOString() }).eq('id', id as string)
-                window.location.href = '/negotiations'
-              }} style={{ padding: '8px 16px', background: '#fff5f5', color: '#e53e3e', borderRadius: '8px', border: '1px solid #fce8e6', fontSize: '13px', cursor: 'pointer' }}>
-                🗑 削除
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -344,6 +335,15 @@ export default function NegotiationDetailPage() {
           </Link>
         </div>
       )}
+      {isAdmin && (
+              <button onClick={async () => {
+                if (!confirm('この商談を削除BOXに移動しますか？')) return
+                await supabase.from('negotiations').update({ deleted_at: new Date().toISOString() }).eq('id', id as string)
+                window.location.href = '/negotiations'
+              }} style={{ padding: '8px 16px', background: '#fff5f5', color: '#e53e3e', borderRadius: '8px', border: '1px solid #fce8e6', fontSize: '13px', cursor: 'pointer' }}>
+                🗑 削除
+              </button>
+            )}
     </div>
   )
 }

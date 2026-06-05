@@ -80,10 +80,6 @@ export default function CustomersPage() {
                 <td style={{ padding: '14px 16px' }}>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <Link href={`/customers/${c.id}`} style={{ fontSize: '13px', color: '#0070f3', textDecoration: 'none' }}>詳細</Link>
-                    {isAdmin && (
-                      <button onClick={() => handleDelete(c.id, c.氏名)}
-                        style={{ fontSize: '12px', color: '#e53e3e', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>削除</button>
-                    )}
                   </div>
                 </td>
               </tr>

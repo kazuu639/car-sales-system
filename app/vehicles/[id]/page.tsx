@@ -163,11 +163,7 @@ export default function VehicleDetailPage() {
             <Link href="/vehicles" style={{ padding: '7px 14px', background: '#f1f3f4', color: '#555', borderRadius: '8px', textDecoration: 'none', fontSize: '13px' }}>← 一覧</Link>
             <Link href={`/negotiations/new?vehicle=${v.id}`} style={{ padding: '7px 14px', background: '#00a86b', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>商談登録</Link>
             <Link href={`/vehicles/${v.id}/edit`} style={{ padding: '7px 14px', background: '#0070f3', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>編集</Link>
-            {isAdmin && (
-              <button onClick={handleDelete} style={{ padding: '7px 14px', background: '#fff5f5', color: '#e53e3e', borderRadius: '8px', border: '1px solid #fce8e6', fontSize: '13px', cursor: 'pointer' }}>
-                🗑 削除
-              </button>
-            )}
+
           </div>
         </div>
 
@@ -477,6 +473,14 @@ export default function VehicleDetailPage() {
               <button onClick={handleSaveTx} style={{ padding: '10px 20px', background: '#0070f3', color: 'white', borderRadius: '8px', border: 'none', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>保存</button>
             </div>
           </div>
+        </div>
+      )}
+      {/* 削除ボタン（管理者のみ） */}
+      {isAdmin && (
+        <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #eee' }}>
+          <button onClick={handleDelete} style={{ padding: '10px 20px', background: '#fff5f5', color: '#e53e3e', borderRadius: '8px', border: '1px solid #fce8e6', fontSize: '13px', cursor: 'pointer', fontWeight: 500 }}>
+            🗑 この車両を削除BOXに移動する
+          </button>
         </div>
       )}
     </div>
