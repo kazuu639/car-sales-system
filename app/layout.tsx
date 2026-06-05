@@ -22,10 +22,11 @@ const NAV_ITEMS = [
   { label: '納車管理',       href: '/deliveries',   icon: 'ti-truck'            },
 ]
 const NAV_ITEMS2 = [
-  { label: '顧客',      href: '/customers', icon: 'ti-users'    },
-  { label: '業者',      href: '/dealers',   icon: 'ti-building' },
-  { label: 'DATA BOX',  href: '/databox',   icon: 'ti-folder'   },
-  { label: '管理画面',  href: '/admin',     icon: 'ti-settings' },
+{ label: '顧客',      href: '/customers', icon: 'ti-users'       },
+{ label: '業者',      href: '/dealers',   icon: 'ti-building'    },
+{ label: 'DATA BOX',  href: '/databox',   icon: 'ti-folder'      },
+{ label: 'レポート',  href: '/reports',   icon: 'ti-chart-bar'   },
+{ label: '管理画面',  href: '/admin',     icon: 'ti-settings'    },
 ]
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
