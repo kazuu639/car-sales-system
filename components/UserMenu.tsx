@@ -55,7 +55,7 @@ export default function UserMenu() {
         <>
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 99 }} />
           <div style={{
-            position: 'absolute', right: 0, top: '40px', width: '240px',
+            position: 'fixed', left: '12px', bottom: '60px', width: '220px',
             background: 'white', border: '1px solid #eee', borderRadius: '12px',
             boxShadow: '0 4px 20px rgba(0,0,0,0.1)', zIndex: 100, overflow: 'hidden'
           }}>
