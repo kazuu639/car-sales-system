@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useProfile } from '@/hooks/useProfile'
 
@@ -51,6 +52,7 @@ const emptyForm = {
 }
 
 export default function InquiriesPage() {
+  const router = useRouter()
   const [inquiries, setInquiries] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState('all')
@@ -59,7 +61,21 @@ export default function InquiriesPage() {
   const [showModal, setShowModal] = useState(false)
   const [editTarget, setEditTarget] = useState<any | null>(null)
   const [form, setForm] = useState(emptyForm)
-  const { isAdmin } = useProfile()
+  const { profile, isAdmin } = useProfile()
+
+  const goToNegotiation = (inq: any) => {
+    const params = new URLSearchParams({
+      from_inquiry: inq.id,
+      customer_name: inq.customer_name,
+      phone: inq.phone || '',
+      source: inq.source || '',
+      assigned_to: inq.assigned_to || '',
+      inquiry_date: inq.inquiry_date,
+      visit_date: inq.visit_date || '',
+      notes: inq.memo || '',
+    })
+    router.push(`/negotiations/new?${params}`)
+  }
 
   const fetchInquiries = async () => {
     setLoading(true)
@@ -76,7 +92,7 @@ export default function InquiriesPage() {
 
   const openNew = () => {
     setEditTarget(null)
-    setForm({ ...emptyForm, inquiry_date: new Date().toISOString().split('T')[0] })
+    setForm({ ...emptyForm, inquiry_date: new Date().toISOString().split('T')[0], assigned_to: profile?.display_name || '' })
     setShowModal(true)
   }
 
@@ -280,8 +296,14 @@ export default function InquiriesPage() {
                     </td>
                     <td style={{ padding: '12px 16px', fontSize: '13px', color: '#888' }}>{inq.assigned_to || '―'}</td>
                     <td style={{ padding: '12px 16px' }}>
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                         <button onClick={() => openEdit(inq)} style={{ fontSize: '12px', color: '#0070f3', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>編集</button>
+                        {inq.category === 'purchase' && (
+                          <button onClick={() => goToNegotiation(inq)}
+                            style={{ fontSize: '11px', color: '#1e7e34', background: '#e6f4ea', border: 'none', borderRadius: '6px', cursor: 'pointer', padding: '3px 8px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            商談へ
+                          </button>
+                        )}
                         {isAdmin && (
                           <button onClick={() => handleDelete(inq.id, inq.customer_name)} style={{ fontSize: '12px', color: '#e53e3e', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>削除</button>
                         )}
@@ -382,8 +404,9 @@ export default function InquiriesPage() {
                 </div>
                 <div>
                   <label style={{ fontSize: '12px', color: '#888', fontWeight: 500 }}>担当者</label>
-                  <input type="text" value={form.assigned_to} onChange={e => setForm({ ...form, assigned_to: e.target.value })} placeholder="山田"
-                    style={{ width: '100%', border: '1px solid #ddd', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', marginTop: '4px', boxSizing: 'border-box' }} />
+                  <div style={{ width: '100%', border: '1px solid #e8e8e8', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', marginTop: '4px', background: '#f8f9fa', color: '#555' }}>
+                    {form.assigned_to || '―'}
+                  </div>
                 </div>
               </div>
 

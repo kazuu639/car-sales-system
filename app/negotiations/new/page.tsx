@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 
@@ -18,29 +18,57 @@ const SOURCES = [
   { value: 'other',     label: 'その他',       color: '#5f6368', bg: '#f1f3f4' },
 ]
 
-export default function NewNegotiationPage() {
+function NewNegotiationContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const fromInquiry = searchParams.get('from_inquiry')
+  const inquiryCustomerName = searchParams.get('customer_name') || ''
+  const inquiryPhone = searchParams.get('phone') || ''
+
   const [loading, setLoading] = useState(false)
   const [customers, setCustomers] = useState<any[]>([])
   const [vehicles, setVehicles] = useState<any[]>([])
+  const [staffList, setStaffList] = useState<any[]>([])
   const [form, setForm] = useState({
     customer_id: '',
     vehicle_id: '',
-    source: '',
-    assigned_to: '',
-    inquiry_date: new Date().toISOString().split('T')[0],
-    visit_date: '',
-    notes: '',
+    source: searchParams.get('source') || '',
+    assigned_to: searchParams.get('assigned_to') || '',
+    inquiry_date: searchParams.get('inquiry_date') || new Date().toISOString().split('T')[0],
+    visit_date: searchParams.get('visit_date') || '',
+    notes: searchParams.get('notes') || '',
   })
 
   useEffect(() => {
-    Promise.all([
-      supabase.from('customers').select('*').order('作成日時', { ascending: false }),
-      supabase.from('vehicles').select('*, master_makers(name), master_models(name)').eq('status', '在庫中').order('created_at', { ascending: false }),
-    ]).then(([c, v]) => {
-      setCustomers(c.data ?? [])
+    const load = async () => {
+      const [c, v, p, { data: { user } }] = await Promise.all([
+        supabase.from('customers').select('*').order('作成日時', { ascending: false }),
+        supabase.from('vehicles').select('*, master_makers(name), master_models(name)').eq('status', '在庫中').order('created_at', { ascending: false }),
+        supabase.from('profiles').select('id, display_name, role').order('created_at', { ascending: true }),
+        supabase.auth.getUser(),
+      ])
+      const customerList = c.data ?? []
+      const profileList = p.data ?? []
+      setCustomers(customerList)
       setVehicles(v.data ?? [])
-    })
+      setStaffList(profileList)
+
+      const currentProfile = profileList.find((pr: any) => pr.id === user?.id)
+      if (currentProfile && !searchParams.get('assigned_to')) {
+        setForm(f => ({ ...f, assigned_to: currentProfile.display_name }))
+      }
+
+      if (fromInquiry && (inquiryPhone || inquiryCustomerName)) {
+        const match = customerList.find((cu: any) =>
+          (inquiryPhone && cu.電話番号 === inquiryPhone) ||
+          (inquiryCustomerName && cu.氏名 === inquiryCustomerName)
+        )
+        if (match) {
+          setForm(f => ({ ...f, customer_id: match.id }))
+        }
+      }
+    }
+    load()
   }, [])
 
   const handleSubmit = async () => {
@@ -50,7 +78,6 @@ export default function NewNegotiationPage() {
       vehicle_id: form.vehicle_id || null,
       source: form.source || null,
       assigned_to: form.assigned_to || null,
-      inquiry_route: form.source || null,
       inquiry_date: form.inquiry_date,
       visit_date: form.visit_date || null,
       notes: form.notes || null,
@@ -58,7 +85,6 @@ export default function NewNegotiationPage() {
       company_id: '00000000-0000-0000-0000-000000000001',
     }]).select().single()
     if (error) { alert('エラー: ' + error.message); setLoading(false); return }
-    // 車両も追加
     if (form.vehicle_id && data) {
       await supabase.from('negotiation_vehicles').insert([{ negotiation_id: data.id, vehicle_id: form.vehicle_id }])
     }
@@ -74,6 +100,20 @@ export default function NewNegotiationPage() {
         <Link href="/negotiations" style={{ fontSize: '13px', color: '#888', textDecoration: 'none' }}>← 商談一覧に戻る</Link>
         <h1 style={{ fontSize: '22px', fontWeight: 700, margin: '8px 0 0' }}>商談登録</h1>
       </div>
+
+      {fromInquiry && (
+        <div style={{ background: '#e6f4ea', border: '1px solid #a8d5b5', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '18px' }}>🔗</span>
+          <div>
+            <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#1e7e34' }}>問合（買取）から引き継ぎ</p>
+            <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#2d6a3f' }}>
+              {inquiryCustomerName}
+              {inquiryPhone && <span style={{ marginLeft: '8px', opacity: 0.8 }}>{inquiryPhone}</span>}
+              　※ 顧客が一覧にある場合は自動選択されています
+            </p>
+          </div>
+        </div>
+      )}
 
       <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
 
@@ -117,7 +157,12 @@ export default function NewNegotiationPage() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           <div>
             <label style={lbl}>担当者</label>
-            <input type="text" value={form.assigned_to} onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))} placeholder="山田" style={inp} />
+            <select value={form.assigned_to} onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))} style={inp}>
+              <option value="">担当者を選択</option>
+              {staffList.map(s => (
+                <option key={s.id} value={s.display_name}>{s.display_name}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label style={lbl}>問合日</label>
@@ -143,5 +188,13 @@ export default function NewNegotiationPage() {
         </button>
       </div>
     </div>
+  )
+}
+
+export default function NewNegotiationPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: '2rem', color: '#aaa' }}>読み込み中...</div>}>
+      <NewNegotiationContent />
+    </Suspense>
   )
 }
