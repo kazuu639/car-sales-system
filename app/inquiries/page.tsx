@@ -3,23 +3,6 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useProfile } from '@/hooks/useProfile'
 
-type Inquiry = {
-  id: string
-  inquiry_date: string
-  customer_name: string
-  phone: string | null
-  email: string | null
-  car_interest: string | null
-  inquiry_type: string | null
-  source: string | null
-  source: string | null
-  status: string
-  memo: string | null
-  assigned_to: string | null
-  category: string | null
-  visit_date: string | null
-  visited: boolean | null
-}
 
 const STATUS_COLOR: Record<string, { bg: string; color: string }> = {
   new:         { bg: '#e8f0fe', color: '#1a73e8' },
@@ -117,15 +100,19 @@ export default function InquiriesPage() {
   }
 
   const handleSave = async () => {
-    if (!form.customer_name) return alert('お客様名を入力してください')
-    if (editTarget) {
-      await supabase.from('inquiries').update({ ...form, updated_at: new Date().toISOString() }).eq('id', editTarget.id)
-    } else {
-      await supabase.from('inquiries').insert(form)
-    }
-    setShowModal(false)
-    fetchInquiries()
+  if (!form.customer_name) return alert('お客様名を入力してください')
+  const payload = {
+    ...form,
+    visit_date: form.visit_date || null,  // 空文字をnullに変換
   }
+  if (editTarget) {
+    await supabase.from('inquiries').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editTarget.id)
+  } else {
+    await supabase.from('inquiries').insert(payload)
+  }
+  setShowModal(false)
+  fetchInquiries()
+}
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`「${name}」を削除しますか？`)) return

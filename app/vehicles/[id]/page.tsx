@@ -163,7 +163,7 @@ export default function VehicleDetailPage() {
             <Link href="/vehicles" style={{ padding: '7px 14px', background: '#f1f3f4', color: '#555', borderRadius: '8px', textDecoration: 'none', fontSize: '13px' }}>← 一覧</Link>
             <Link href={`/negotiations/new?vehicle=${v.id}`} style={{ padding: '7px 14px', background: '#00a86b', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>商談登録</Link>
             <Link href={`/vehicles/${v.id}/edit`} style={{ padding: '7px 14px', background: '#0070f3', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>編集</Link>
-
+            <Link href={`/vehicles/${v.id}/purchase-contract`} style={{ padding: '7px 14px', background: '#e65100', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>📋 買取契約書</Link>
           </div>
         </div>
 
