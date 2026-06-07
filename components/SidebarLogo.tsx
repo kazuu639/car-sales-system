@@ -9,8 +9,8 @@ const GEARS = [
 
 // 縮小時用: 大(オレンジ)と小(緑)を縦に2つ
 const GEARS_SMALL = [
-  { cx:20, cy:18, ri:11, ro:15, teeth:10, color:'#e8622a', dir:1,   phaseOff:0 },
-  { cx:20, cy:42, ri:8,  ro:11, teeth:8,  color:'#4caf50', dir:-1,  phaseOff:Math.PI/8 },
+  { cx:24, cy:22, ri:13, ro:18, teeth:10, color:'#e8622a', dir:1,   phaseOff:0 },
+  { cx:24, cy:50, ri:10, ro:13, teeth:8,  color:'#4caf50', dir:-1,  phaseOff:Math.PI/8 },
 ]
 
 function gearPath(cx: number, cy: number, ri: number, ro: number, teeth: number, rot: number) {
@@ -32,9 +32,9 @@ export default function SidebarLogo({ collapsed }: { collapsed: boolean }) {
   const startRef = useRef<number | null>(null)
   const runningRef = useRef(false)
 
-  const H = collapsed ? 56 : 44
- const W = collapsed ? 40 : 175
-  const S = 0.38
+  const H = collapsed ? 67 : 53
+  const W = collapsed ? 48 : 210
+  const S = 0.456
 
   function draw(elapsed: number) {
     const canvas = canvasRef.current
@@ -71,18 +71,18 @@ export default function SidebarLogo({ collapsed }: { collapsed: boolean }) {
       ctx.restore()
 
       const TX = H + 6
-      const line1Y = 8 + 18
-      const line2Y = line1Y + 4 + 7
+      const line1Y = 10 + 22
+      const line2Y = line1Y + 5 + 8
 
       ctx.fillStyle = '#1e3a5f'
-      ctx.font = '700 18px system-ui,sans-serif'
+      ctx.font = '700 22px system-ui,sans-serif'
       ctx.fillText('Brain', TX, line1Y)
       const brainW = ctx.measureText('Brain').width
       ctx.fillStyle = '#2196f3'
-      ctx.font = '700 18px system-ui,sans-serif'
+      ctx.font = '700 22px system-ui,sans-serif'
       ctx.fillText('Base', TX + brainW + 3, line1Y)
       ctx.fillStyle = '#bbb'
-      ctx.font = '500 7px system-ui,sans-serif'
+      ctx.font = '500 8px system-ui,sans-serif'
       ctx.fillText('CAR SALES SYSTEM', TX, line2Y)
     }
 
@@ -117,7 +117,7 @@ export default function SidebarLogo({ collapsed }: { collapsed: boolean }) {
       height={H}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      style={{ display: 'block', cursor: 'default' }}
+      style={{ display: 'block', cursor: 'pointer' }}
     />
   )
 }

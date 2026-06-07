@@ -109,7 +109,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     '車両': '#e8f0fe', '顧客': '#e6f4ea', '商談': '#fff3e0', '問合': '#fce8e6'
   }
 
-  const sidebarW = collapsed ? 56 : 220
+  const sidebarW = collapsed ? 56 : 230
 
   const NavLink = ({ href, icon, label }: { href: string; icon: string; label: string }) => {
     const active = pathname === href || (href !== '/' && pathname.startsWith(href))
@@ -160,17 +160,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           transition: 'width 0.22s ease', overflow: 'hidden', zIndex: 100,
           flexShrink: 0,
         }}>
-          {/* ロゴ＋トグル */}
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', minHeight: '56px' }}>
-            {!collapsed && <SidebarLogo collapsed={collapsed} />}
-            <button onClick={() => setCollapsed(!collapsed)} style={{
-              width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #eee',
-              background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', flexShrink: 0,
-            }} aria-label="サイドバー切替">
-              <i className={`ti ${collapsed ? 'ti-layout-sidebar-left-expand' : 'ti-layout-sidebar-left-collapse'}`} style={{ fontSize: '16px', color: '#888' }} aria-hidden="true" />
-            </button>
-            {collapsed && <SidebarLogo collapsed={collapsed} />}
+          {/* ロゴ */}
+          <div style={{ padding: '8px 0', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '56px' }}>
+            <Link href="/" style={{ lineHeight: 0 }}><SidebarLogo collapsed={collapsed} /></Link>
           </div>
 
           {/* 検索ボタン */}
@@ -200,6 +192,35 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <UserMenu />
           </div>
         </aside>
+
+        {/* サイドバー開閉ボタン */}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          style={{
+            position: 'fixed',
+            left: `${sidebarW - 12}px`,
+            top: '70px',
+            width: '24px',
+            height: '40px',
+            background: 'white',
+            border: '1px solid #ddd',
+            borderLeft: 'none',
+            borderRadius: '0 6px 6px 0',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 110,
+            boxShadow: '2px 0 6px rgba(0,0,0,0.08)',
+            transition: 'left 0.22s ease',
+            padding: 0,
+          }}
+          aria-label="サイドバー切替"
+        >
+          <span style={{ fontSize: '16px', color: '#999', lineHeight: 1, userSelect: 'none' }}>
+            {collapsed ? '›' : '‹'}
+          </span>
+        </button>
 
         {/* 検索オーバーレイ */}
         {searchOpen && (
