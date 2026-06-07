@@ -32,12 +32,21 @@ export default function VehicleDetailPage() {
   const { id } = useParams()
   const { isAdmin } = useProfile()
   const [v, setV] = useState<any>(null)
-  const [mainImg, setMainImg] = useState(0)
   const [transactions, setTransactions] = useState<TxRecord[]>([])
   const searchParams = useSearchParams()
   const initialTab = searchParams.get('tab') || '在庫'
   const [tab, setTab] = useState<'仕入' | '在庫' | '契約' | '登録' | '財務'>(initialTab as '仕入' | '在庫' | '契約' | '登録' | '財務')
   const [saving, setSaving] = useState(false)
+  const [editingPurchase, setEditingPurchase] = useState(false)
+  const [editingStock, setEditingStock] = useState(false)
+  const [editingRegistration, setEditingRegistration] = useState(false)
+  const [editingContract, setEditingContract] = useState(false)
+  const [editForm, setEditForm] = useState<Record<string, any>>({})
+  const [photoUrls, setPhotoUrls] = useState<string[]>([])
+  const [dragIdx, setDragIdx] = useState<number | null>(null)
+  const [photoChanged, setPhotoChanged] = useState(false)
+  const [editingPhoto, setEditingPhoto] = useState(false)
+  const [photoUploading, setPhotoUploading] = useState(false)
   const [showStatusModal, setShowStatusModal] = useState(false)
   const [showImageModal, setShowImageModal] = useState(false)
   const [imageModalUrl, setImageModalUrl] = useState('')
@@ -114,6 +123,10 @@ export default function VehicleDetailPage() {
   useEffect(() => { fetchVehicle(); fetchTransactions(); fetchDelivery() }, [id])
 
   useEffect(() => {
+    if (v) { setPhotoUrls(v.image_urls ?? []); setPhotoChanged(false) }
+  }, [v?.id])
+
+  useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') { setShowStatusModal(false); setShowImageModal(false) } }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -127,6 +140,27 @@ export default function VehicleDetailPage() {
     setSaving(false)
   }
   const toggleCheck = (key: string) => updateVehicle({ [key]: !v[key] })
+  const savePhotoOrder = async () => { await updateVehicle({ image_urls: photoUrls }); setPhotoChanged(false) }
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    setPhotoUploading(true)
+    const newUrls: string[] = []
+    for (const file of Array.from(files)) {
+      const ext = file.name.split('.').pop()
+      const path = `${id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+      const { error } = await supabase.storage.from('vehicle-images').upload(path, file)
+      if (!error) {
+        const { data } = supabase.storage.from('vehicle-images').getPublicUrl(path)
+        newUrls.push(data.publicUrl)
+      }
+    }
+    setPhotoUrls(prev => [...prev, ...newUrls])
+    setPhotoChanged(true)
+    setPhotoUploading(false)
+    e.target.value = ''
+  }
 
   const handleDelete = async () => {
     if (!confirm('この車両を削除BOXに移動しますか？\n関連する商談・財務明細も移動されます。')) return
@@ -285,12 +319,60 @@ export default function VehicleDetailPage() {
       {tab === '仕入' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 600, margin: '0 0 16px' }}>仕入顧客情報</h3>
-            {cell('仕入区分', v.purchase_type)}
-            {cell('仕入契約日', v.purchase_contract_date)}
-            {cell('入庫日', v.stock_date)}
-            {cell('仕入担当', v.purchase_staff)}
-            {cell('仕入金額', v.purchase_price ? '¥' + v.purchase_price.toLocaleString() : null)}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: 600, margin: 0 }}>仕入情報</h3>
+              {!editingPurchase && (
+                <button onClick={() => { setEditingPurchase(true); setEditForm({ purchase_type: v.purchase_type ?? '', purchase_price: v.purchase_price ?? '', stock_date: v.stock_date ?? '', purchase_staff: v.purchase_staff ?? '' }) }}
+                  style={{ padding: '5px 14px', background: '#f1f3f4', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#555', fontWeight: 500 }}>
+                  仕入情報を編集
+                </button>
+              )}
+            </div>
+            {!editingPurchase ? (
+              <>
+                {cell('仕入区分', v.purchase_type)}
+                {cell('仕入契約日', v.purchase_contract_date)}
+                {cell('入庫日', v.stock_date)}
+                {cell('仕入担当', v.purchase_staff)}
+                {cell('仕入金額', v.purchase_price ? '¥' + v.purchase_price.toLocaleString() : null)}
+              </>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>仕入区分</label>
+                  <select value={editForm.purchase_type} onChange={e => setEditForm((f: any) => ({ ...f, purchase_type: e.target.value }))}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }}>
+                    {['買取', 'AA', '業者AA', '業販', '下取'].map(o => <option key={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>仕入金額（円）</label>
+                  <input type="number" value={editForm.purchase_price} onChange={e => setEditForm((f: any) => ({ ...f, purchase_price: e.target.value }))}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>入庫日</label>
+                  <input type="date" value={editForm.stock_date} onChange={e => setEditForm((f: any) => ({ ...f, stock_date: e.target.value }))}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>仕入担当</label>
+                  <input type="text" value={editForm.purchase_staff} onChange={e => setEditForm((f: any) => ({ ...f, purchase_staff: e.target.value }))}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' }} />
+                </div>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                  <button onClick={async () => { await updateVehicle({ purchase_type: editForm.purchase_type || null, purchase_price: editForm.purchase_price ? parseInt(editForm.purchase_price) : null, stock_date: editForm.stock_date || null, purchase_staff: editForm.purchase_staff || null }); setEditingPurchase(false) }}
+                    disabled={saving}
+                    style={{ flex: 1, padding: '9px', background: '#0070f3', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+                    {saving ? '保存中...' : '保存'}
+                  </button>
+                  <button onClick={() => setEditingPurchase(false)}
+                    style={{ flex: 1, padding: '9px', background: '#f1f3f4', color: '#555', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                    キャンセル
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
           <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px' }}>
             <h3 style={{ fontSize: '14px', fontWeight: 600, margin: '0 0 16px' }}>仕入写真・書類</h3>
@@ -339,40 +421,149 @@ export default function VehicleDetailPage() {
             </div>
           </div>
           <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 600, margin: '0 0 16px' }}>販売価格（デフォルト見積）</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
-              {[
-                { label: '車体価格', value: v.list_price ?? v.body_price },
-                { label: '諸費用', value: v.misc_fee },
-                { label: '支払総額', value: v.total_payment ?? v.total_price },
-              ].map(f => (
-                <div key={f.label} style={{ background: '#f8f9fa', borderRadius: '8px', padding: '14px' }}>
-                  <div style={{ fontSize: '12px', color: '#888', marginBottom: '6px' }}>{f.label}</div>
-                  <div style={{ fontSize: '20px', fontWeight: 700 }}>{f.value ? '¥' + f.value.toLocaleString() : '—'}</div>
-                </div>
-              ))}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: 600, margin: 0 }}>販売価格（デフォルト見積）</h3>
+              {!editingStock && (
+                <button onClick={() => { setEditingStock(true); setEditForm({ body_price: v.body_price ?? '', total_price: v.total_price ?? '', repair_history: v.repair_history ?? false }) }}
+                  style={{ padding: '5px 14px', background: '#f1f3f4', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#555', fontWeight: 500 }}>
+                  販売情報を編集
+                </button>
+              )}
             </div>
+            {!editingStock ? (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '12px' }}>
+                  {[
+                    { label: '車体価格', value: v.list_price ?? v.body_price },
+                    { label: '諸費用', value: v.misc_fee },
+                    { label: '支払総額', value: v.total_payment ?? v.total_price },
+                  ].map(f => (
+                    <div key={f.label} style={{ background: '#f8f9fa', borderRadius: '8px', padding: '14px' }}>
+                      <div style={{ fontSize: '12px', color: '#888', marginBottom: '6px' }}>{f.label}</div>
+                      <div style={{ fontSize: '20px', fontWeight: 700 }}>{f.value ? '¥' + f.value.toLocaleString() : '—'}</div>
+                    </div>
+                  ))}
+                </div>
+                {cell('修復歴', v.repair_history ? 'あり' : 'なし')}
+              </>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>車体価格（円）</label>
+                    <input type="number" value={editForm.body_price} onChange={e => setEditForm((f: any) => ({ ...f, body_price: e.target.value }))}
+                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>支払総額（円）</label>
+                    <input type="number" value={editForm.total_price} onChange={e => setEditForm((f: any) => ({ ...f, total_price: e.target.value }))}
+                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' }} />
+                  </div>
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={editForm.repair_history} onChange={e => setEditForm((f: any) => ({ ...f, repair_history: e.target.checked }))} style={{ width: '16px', height: '16px' }} />
+                  修復歴あり
+                </label>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                  <button onClick={async () => { await updateVehicle({ body_price: editForm.body_price ? parseInt(editForm.body_price) : null, total_price: editForm.total_price ? parseInt(editForm.total_price) : null, repair_history: editForm.repair_history }); setEditingStock(false) }}
+                    disabled={saving}
+                    style={{ flex: 1, padding: '9px', background: '#0070f3', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+                    {saving ? '保存中...' : '保存'}
+                  </button>
+                  <button onClick={() => setEditingStock(false)}
+                    style={{ flex: 1, padding: '9px', background: '#f1f3f4', color: '#555', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                    キャンセル
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
           <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h3 style={{ fontSize: '14px', fontWeight: 600, margin: 0 }}>WEB用写真</h3>
-              <Link href={`/vehicles/${v.id}/edit`} style={{ fontSize: '12px', color: '#0070f3', textDecoration: 'none' }}>写真を編集 →</Link>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                {!editingPhoto ? (
+                  <button onClick={() => setEditingPhoto(true)}
+                    style={{ padding: '5px 14px', background: '#f1f3f4', color: '#555', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 500, cursor: 'pointer' }}>
+                    写真を編集
+                  </button>
+                ) : (
+                  <>
+                    {photoChanged && (
+                      <button onClick={async () => { await savePhotoOrder() }} disabled={saving}
+                        style={{ padding: '5px 14px', background: '#0070f3', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+                        {saving ? '保存中...' : '並び順を保存'}
+                      </button>
+                    )}
+                    <button onClick={() => { setEditingPhoto(false); setPhotoUrls(v.image_urls ?? []); setPhotoChanged(false) }}
+                      style={{ padding: '5px 14px', background: '#f1f3f4', color: '#555', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 500, cursor: 'pointer' }}>
+                      編集を終了
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
-            {v.image_urls?.length > 0 ? (
-              <div>
-                <img src={v.image_urls[mainImg]} alt="メイン" onClick={() => { setImageModalUrl(v.image_urls[mainImg]); setShowImageModal(true) }}
-                  style={{ width: '100%', height: '280px', objectFit: 'cover', borderRadius: '10px', marginBottom: '10px', border: '1px solid #eee', cursor: 'zoom-in' }} />
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {v.image_urls.map((url: string, i: number) => (
-                    <img key={i} src={url} alt="" onClick={() => setMainImg(i)}
-                      style={{ width: '72px', height: '54px', objectFit: 'cover', borderRadius: '6px', cursor: 'pointer', border: mainImg === i ? '2px solid #0070f3' : '1px solid #eee' }} />
-                  ))}
+            {photoUrls.length > 0 ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                {/* 左：メイン画像（aspect-ratio 4/3） */}
+                <div style={{ position: 'relative', width: '100%', aspectRatio: '4/3', borderRadius: '10px', overflow: 'hidden', border: '1px solid #eee' }}>
+                  <img src={photoUrls[0]} alt="メイン"
+                    onClick={() => { setImageModalUrl(photoUrls[0]); setShowImageModal(true) }}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in', display: 'block' }} />
+                  <span style={{ position: 'absolute', bottom: '8px', left: '8px', background: '#0070f3', color: 'white', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '4px', pointerEvents: 'none' }}>メイン</span>
+                </div>
+                {/* 右：全画像グリッド（編集モード時：ドラッグ＋削除＋追加） */}
+                <div style={{ overflowY: 'auto' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '8px' }}>
+                    {photoUrls.map((url, i) => (
+                      <div key={url + i}
+                        draggable={editingPhoto}
+                        onDragStart={editingPhoto ? () => setDragIdx(i) : undefined}
+                        onDragOver={editingPhoto ? e => e.preventDefault() : undefined}
+                        onDrop={editingPhoto ? e => {
+                          e.preventDefault()
+                          if (dragIdx === null || dragIdx === i) return
+                          const arr = [...photoUrls]
+                          const moved = arr.splice(dragIdx, 1)[0]
+                          arr.splice(i, 0, moved)
+                          setPhotoUrls(arr); setPhotoChanged(true); setDragIdx(null)
+                        } : undefined}
+                        onDragEnd={editingPhoto ? () => setDragIdx(null) : undefined}
+                        style={{ position: 'relative', cursor: editingPhoto ? 'grab' : 'default', opacity: dragIdx === i ? 0.4 : 1 }}>
+                        <img src={url} alt=""
+                          onClick={() => { if (!editingPhoto) { setImageModalUrl(url); setShowImageModal(true) } }}
+                          style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '6px', border: i === 0 ? '2px solid #0070f3' : '1px solid #eee', display: 'block', cursor: editingPhoto ? 'grab' : 'zoom-in' }} />
+                        {i === 0 && (
+                          <span style={{ position: 'absolute', bottom: '4px', left: '4px', background: '#0070f3', color: 'white', fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '3px', pointerEvents: 'none' }}>メイン</span>
+                        )}
+                        {editingPhoto && (
+                          <button onClick={e => { e.stopPropagation(); setPhotoUrls(photoUrls.filter((_, idx) => idx !== i)); setPhotoChanged(true) }}
+                            style={{ position: 'absolute', top: '4px', right: '4px', width: '20px', height: '20px', background: 'rgba(0,0,0,0.65)', border: 'none', borderRadius: '50%', color: 'white', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {editingPhoto && (
+                      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100px', borderRadius: '6px', border: '2px dashed #ddd', cursor: photoUploading ? 'wait' : 'pointer', background: '#fafafa', fontSize: '24px', color: '#ccc' }}>
+                        {photoUploading ? '⏳' : '+'}
+                        <input type="file" accept="image/*" multiple onChange={handlePhotoUpload} style={{ display: 'none' }} disabled={photoUploading} />
+                      </label>
+                    )}
+                  </div>
                 </div>
               </div>
             ) : (
               <div style={{ padding: '3rem', textAlign: 'center', color: '#ccc', fontSize: '13px', background: '#fafafa', borderRadius: '8px' }}>
                 写真が登録されていません
-                <div style={{ marginTop: '8px' }}><Link href={`/vehicles/${v.id}/edit`} style={{ fontSize: '13px', color: '#0070f3', textDecoration: 'none' }}>写真を追加する →</Link></div>
+                {editingPhoto && (
+                  <div style={{ marginTop: '12px' }}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 20px', background: '#0070f3', color: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 500 }}>
+                      📷 写真を追加
+                      <input type="file" accept="image/*" multiple onChange={handlePhotoUpload} style={{ display: 'none' }} />
+                    </label>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -398,11 +589,47 @@ export default function VehicleDetailPage() {
           {contractSubTab === '契約情報' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px' }}>
-                <h3 style={{ fontSize: '14px', fontWeight: 600, margin: '0 0 16px' }}>販売契約情報</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '14px', fontWeight: 600, margin: 0 }}>販売契約情報</h3>
+                  {!editingContract && (
+                    <button onClick={() => { setEditingContract(true); setEditForm({ contract_date: v.contract_date ?? '', delivery_date: v.delivery_date ?? '' }) }}
+                      style={{ padding: '5px 14px', background: '#f1f3f4', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#555', fontWeight: 500 }}>
+                      契約情報を編集
+                    </button>
+                  )}
+                </div>
                 {cell('販売担当', v.sales_staff)}
-                {cell('販売契約日', v.contract_date)}
-                {cell('売上日', v.sale_date)}
-                {cell('納車日', v.delivery_date)}
+                {!editingContract ? (
+                  <>
+                    {cell('販売契約日', v.contract_date)}
+                    {cell('売上日', v.sale_date)}
+                    {cell('納車日', v.delivery_date)}
+                  </>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '12px', background: '#f8f9fa', borderRadius: '8px', marginBottom: '8px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>契約日</label>
+                      <input type="date" value={editForm.contract_date} onChange={e => setEditForm((f: any) => ({ ...f, contract_date: e.target.value }))}
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>納車日</label>
+                      <input type="date" value={editForm.delivery_date} onChange={e => setEditForm((f: any) => ({ ...f, delivery_date: e.target.value }))}
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={async () => { await updateVehicle({ contract_date: editForm.contract_date || null, delivery_date: editForm.delivery_date || null }); setEditingContract(false) }}
+                        disabled={saving}
+                        style={{ flex: 1, padding: '9px', background: '#0070f3', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+                        {saving ? '保存中...' : '保存'}
+                      </button>
+                      <button onClick={() => setEditingContract(false)}
+                        style={{ flex: 1, padding: '9px', background: '#f1f3f4', color: '#555', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                        キャンセル
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {cell('済車日', v.completion_date)}
                 {cell('車体価格', v.body_price ? '¥' + v.body_price.toLocaleString() : null)}
                 {cell('支払総額', v.total_price ? '¥' + v.total_price.toLocaleString() : null)}
@@ -586,25 +813,61 @@ export default function VehicleDetailPage() {
       {/* ===== 登録タブ ===== */}
       {tab === '登録' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {[
-            { title: '仕入時 車検証情報', desc: '仕入れた時点の車検証情報' },
-            { title: '在庫時 車検証情報', desc: '在庫期間中の車検証情報' },
-            { title: '販売後 車検証情報', desc: '名義変更後の車検証情報' },
-          ].map((sec, i) => (
-            <div key={i} style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px' }}>
-              <h3 style={{ fontSize: '14px', fontWeight: 600, margin: '0 0 4px' }}>{sec.title}</h3>
-              <p style={{ fontSize: '12px', color: '#aaa', margin: '0 0 16px' }}>{sec.desc}</p>
+          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: 600, margin: 0 }}>車検証情報</h3>
+              {!editingRegistration && (
+                <button onClick={() => { setEditingRegistration(true); setEditForm({ car_name: v.car_name ?? '', year: v.year ?? '', mileage: v.mileage ?? '', shift: v.shift ?? '', color: v.color ?? '', chassis_number: v.chassis_number ?? '', car_number: v.car_number ?? '', inspection_date: v.inspection_date ?? '' }) }}
+                  style={{ padding: '5px 14px', background: '#f1f3f4', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#555', fontWeight: 500 }}>
+                  車検証情報を編集
+                </button>
+              )}
+            </div>
+            {!editingRegistration ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 24px' }}>
+                {cell('車種', v.car_name)}
+                {cell('年式', v.year ? v.year + '年' : null)}
+                {cell('走行距離', v.mileage ? v.mileage.toLocaleString() + 'km' : null)}
+                {cell('シフト', v.shift)}
+                {cell('外装色', v.color)}
                 {cell('車台番号', v.chassis_number)}
                 {cell('車両ナンバー', v.car_number)}
-                {cell('型式', v.model_type)}
                 {cell('車検満了日', v.inspection_date)}
               </div>
-              <div style={{ marginTop: '12px', padding: '12px', background: '#f8f9fa', borderRadius: '8px', textAlign: 'center', color: '#ccc', fontSize: '12px' }}>
-                車検証写真アップロード機能（開発予定）
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  {([
+                    { label: '車種', key: 'car_name', type: 'text' },
+                    { label: '年式', key: 'year', type: 'number' },
+                    { label: '走行距離（km）', key: 'mileage', type: 'number' },
+                    { label: 'シフト', key: 'shift', type: 'text' },
+                    { label: '色', key: 'color', type: 'text' },
+                    { label: '車台番号', key: 'chassis_number', type: 'text' },
+                    { label: '車両ナンバー', key: 'car_number', type: 'text' },
+                    { label: '車検満了日', key: 'inspection_date', type: 'date' },
+                  ] as const).map(({ label, key, type }) => (
+                    <div key={key}>
+                      <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>{label}</label>
+                      <input type={type} value={editForm[key]} onChange={e => setEditForm((f: any) => ({ ...f, [key]: e.target.value }))}
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' }} />
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                  <button onClick={async () => { await updateVehicle({ car_name: editForm.car_name || null, year: editForm.year ? parseInt(editForm.year) : null, mileage: editForm.mileage ? parseInt(editForm.mileage) : null, shift: editForm.shift || null, color: editForm.color || null, chassis_number: editForm.chassis_number || null, car_number: editForm.car_number || null, inspection_date: editForm.inspection_date || null }); setEditingRegistration(false) }}
+                    disabled={saving}
+                    style={{ flex: 1, padding: '9px', background: '#0070f3', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+                    {saving ? '保存中...' : '保存'}
+                  </button>
+                  <button onClick={() => setEditingRegistration(false)}
+                    style={{ flex: 1, padding: '9px', background: '#f1f3f4', color: '#555', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                    キャンセル
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            )}
+          </div>
         </div>
       )}
 
