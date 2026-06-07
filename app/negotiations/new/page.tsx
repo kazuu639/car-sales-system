@@ -3,6 +3,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import { useProfile } from '@/hooks/useProfile'
 
 const SOURCES = [
   { value: 'carsensor', label: 'カーセンサー', color: '#c0392b', bg: '#fde8e8' },
@@ -18,10 +19,18 @@ const SOURCES = [
   { value: 'other',     label: 'その他',       color: '#5f6368', bg: '#f1f3f4' },
 ]
 
+const TITLE_CONFIG: Record<string, string> = {
+  purchase: '仕入商談 登録',
+  sales:    '販売商談 登録',
+  other:    'その他商談 登録',
+}
+
 function NewNegotiationContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { profile } = useProfile()
   const fromInquiry = searchParams.get('from_inquiry')
+  const inquiryCategory = searchParams.get('category') || 'sales'
   const inquiryCustomerName = searchParams.get('customer_name') || ''
   const inquiryPhone = searchParams.get('phone') || ''
 
@@ -29,9 +38,14 @@ function NewNegotiationContent() {
   const [customers, setCustomers] = useState<any[]>([])
   const [vehicles, setVehicles] = useState<any[]>([])
   const [staffList, setStaffList] = useState<any[]>([])
+  const [purchaseInfo, setPurchaseInfo] = useState({
+    maker: '', model: '', year: '', mileage: '',
+    desired_price: '', chassis_number: '', color: '', repair_history: false,
+  })
   const [form, setForm] = useState({
     customer_id: '',
     vehicle_id: '',
+    category: inquiryCategory,
     source: searchParams.get('source') || '',
     assigned_to: searchParams.get('assigned_to') || '',
     inquiry_date: searchParams.get('inquiry_date') || new Date().toISOString().split('T')[0],
@@ -39,11 +53,17 @@ function NewNegotiationContent() {
     notes: searchParams.get('notes') || '',
   })
 
+  const BANNER_CONFIG: Record<string, { bg: string; border: string; color: string; subcolor: string; label: string }> = {
+    purchase: { bg: '#e6f4ea', border: '#a8d5b5', color: '#1e7e34', subcolor: '#2d6a3f', label: '買取問合せから引き継ぎ' },
+    sales:    { bg: '#e8f0fe', border: '#93b4f0', color: '#1a73e8', subcolor: '#1558b0', label: '販売問合せから引き継ぎ' },
+    other:    { bg: '#fff3e0', border: '#ffc080', color: '#e65100', subcolor: '#b83c00', label: 'その他問合せから引き継ぎ' },
+  }
+
   useEffect(() => {
     const load = async () => {
       const [c, v, p, { data: { user } }] = await Promise.all([
         supabase.from('customers').select('*').order('作成日時', { ascending: false }),
-        supabase.from('vehicles').select('*, master_makers(name), master_models(name)').eq('status', '在庫中').order('created_at', { ascending: false }),
+        supabase.from('vehicles').select('*, master_makers(name), master_models(name)').is('deleted_at', null).order('created_at', { ascending: false }),
         supabase.from('profiles').select('id, display_name, role').order('created_at', { ascending: true }),
         supabase.auth.getUser(),
       ])
@@ -73,6 +93,21 @@ function NewNegotiationContent() {
 
   const handleSubmit = async () => {
     setLoading(true)
+    let notesText = form.notes || ''
+    if (form.category === 'purchase') {
+      const fields: [string, string][] = [
+        ['メーカー',     purchaseInfo.maker],
+        ['車種',         purchaseInfo.model],
+        ['年式',         purchaseInfo.year ? purchaseInfo.year + '年' : ''],
+        ['走行距離',     purchaseInfo.mileage ? purchaseInfo.mileage + 'km' : ''],
+        ['希望買取金額', purchaseInfo.desired_price ? '¥' + Number(purchaseInfo.desired_price).toLocaleString() : ''],
+        ['車台番号',     purchaseInfo.chassis_number],
+        ['色',           purchaseInfo.color],
+        ['修復歴',       purchaseInfo.repair_history ? 'あり' : ''],
+      ]
+      const info = fields.filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join('\n')
+      if (info) notesText = `【買取車両情報】\n${info}${notesText ? '\n\n【備考】\n' + notesText : ''}`
+    }
     const { data, error } = await supabase.from('negotiations').insert([{
       customer_id: form.customer_id || null,
       vehicle_id: form.vehicle_id || null,
@@ -80,14 +115,12 @@ function NewNegotiationContent() {
       assigned_to: form.assigned_to || null,
       inquiry_date: form.inquiry_date,
       visit_date: form.visit_date || null,
-      notes: form.notes || null,
+      notes: notesText || null,
+      category: form.category || null,
       status: '商談中',
-      company_id: '00000000-0000-0000-0000-000000000001',
+      company_id: profile?.company_id ?? null,
     }]).select().single()
     if (error) { alert('エラー: ' + error.message); setLoading(false); return }
-    if (form.vehicle_id && data) {
-      await supabase.from('negotiation_vehicles').insert([{ negotiation_id: data.id, vehicle_id: form.vehicle_id }])
-    }
     router.push(`/negotiations/${data.id}`)
   }
 
@@ -98,22 +131,25 @@ function NewNegotiationContent() {
     <div style={{ padding: '2rem', maxWidth: '640px', margin: '0 auto' }}>
       <div style={{ marginBottom: '1.5rem' }}>
         <Link href="/negotiations" style={{ fontSize: '13px', color: '#888', textDecoration: 'none' }}>← 商談一覧に戻る</Link>
-        <h1 style={{ fontSize: '22px', fontWeight: 700, margin: '8px 0 0' }}>商談登録</h1>
+        <h1 style={{ fontSize: '22px', fontWeight: 700, margin: '8px 0 0' }}>{TITLE_CONFIG[form.category] ?? '商談登録'}</h1>
       </div>
 
-      {fromInquiry && (
-        <div style={{ background: '#e6f4ea', border: '1px solid #a8d5b5', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '18px' }}>🔗</span>
-          <div>
-            <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#1e7e34' }}>問合（買取）から引き継ぎ</p>
-            <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#2d6a3f' }}>
-              {inquiryCustomerName}
-              {inquiryPhone && <span style={{ marginLeft: '8px', opacity: 0.8 }}>{inquiryPhone}</span>}
-              　※ 顧客が一覧にある場合は自動選択されています
-            </p>
+      {fromInquiry && (() => {
+        const bc = BANNER_CONFIG[inquiryCategory] ?? BANNER_CONFIG.sales
+        return (
+          <div style={{ background: bc.bg, border: `1px solid ${bc.border}`, borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '18px' }}>🔗</span>
+            <div>
+              <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: bc.color }}>{bc.label}</p>
+              <p style={{ margin: '2px 0 0', fontSize: '12px', color: bc.subcolor }}>
+                {inquiryCustomerName}
+                {inquiryPhone && <span style={{ marginLeft: '8px', opacity: 0.8 }}>{inquiryPhone}</span>}
+                　※ 顧客が一覧にある場合は自動選択されています
+              </p>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
 
@@ -144,14 +180,65 @@ function NewNegotiationContent() {
 
         {/* 対象車両 */}
         <div>
-          <label style={lbl}>対象車両（在庫中）</label>
+          <label style={lbl}>
+            {form.category === 'purchase' ? '関連車両（任意）' : form.category === 'sales' ? '対象車両（在庫中）' : '関連車両'}
+          </label>
           <select value={form.vehicle_id} onChange={e => setForm(f => ({ ...f, vehicle_id: e.target.value }))} style={inp}>
-            <option value="">車両を選択してください</option>
-            {vehicles.map(v => (
-              <option key={v.id} value={v.id}>{v.db_number}　{v.master_makers?.name} {v.master_models?.name}　{v.year ? v.year + '年' : ''}</option>
+            <option value="">（車両なし）</option>
+            {(form.category === 'sales'
+              ? vehicles.filter(v => v.status === '在庫中')
+              : vehicles
+            ).map(v => (
+              <option key={v.id} value={v.id}>
+                {v.db_number}　{v.master_makers?.name} {v.master_models?.name}　{v.year ? v.year + '年' : ''}　[{v.status}]
+              </option>
             ))}
           </select>
         </div>
+
+        {/* 買取車両情報（仕入商談のみ） */}
+        {form.category === 'purchase' && (
+          <div style={{ background: '#f8f9fa', borderRadius: '10px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>買取車両情報</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={lbl}>メーカー</label>
+                <input type="text" value={purchaseInfo.maker} onChange={e => setPurchaseInfo(p => ({ ...p, maker: e.target.value }))} placeholder="トヨタ" style={inp} />
+              </div>
+              <div>
+                <label style={lbl}>車種</label>
+                <input type="text" value={purchaseInfo.model} onChange={e => setPurchaseInfo(p => ({ ...p, model: e.target.value }))} placeholder="アルファード" style={inp} />
+              </div>
+              <div>
+                <label style={lbl}>年式</label>
+                <input type="number" value={purchaseInfo.year} onChange={e => setPurchaseInfo(p => ({ ...p, year: e.target.value }))} placeholder="2020" style={inp} />
+              </div>
+              <div>
+                <label style={lbl}>走行距離（km）</label>
+                <input type="number" value={purchaseInfo.mileage} onChange={e => setPurchaseInfo(p => ({ ...p, mileage: e.target.value }))} placeholder="50000" style={inp} />
+              </div>
+              <div>
+                <label style={lbl}>希望買取金額（円）</label>
+                <input type="number" value={purchaseInfo.desired_price} onChange={e => setPurchaseInfo(p => ({ ...p, desired_price: e.target.value }))} placeholder="2000000" style={inp} />
+              </div>
+              <div>
+                <label style={lbl}>車台番号</label>
+                <input type="text" value={purchaseInfo.chassis_number} onChange={e => setPurchaseInfo(p => ({ ...p, chassis_number: e.target.value }))} placeholder="ABC-1234567" style={inp} />
+              </div>
+              <div>
+                <label style={lbl}>色</label>
+                <input type="text" value={purchaseInfo.color} onChange={e => setPurchaseInfo(p => ({ ...p, color: e.target.value }))} placeholder="パールホワイト" style={inp} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '2px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
+                  <input type="checkbox" checked={purchaseInfo.repair_history} onChange={e => setPurchaseInfo(p => ({ ...p, repair_history: e.target.checked }))}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
+                  修復歴あり
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 担当者・問合日 */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>

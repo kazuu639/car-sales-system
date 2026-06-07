@@ -38,6 +38,9 @@ export default function VehicleDetailPage() {
   const initialTab = searchParams.get('tab') || '在庫'
   const [tab, setTab] = useState<'仕入' | '在庫' | '契約' | '登録' | '財務'>(initialTab as '仕入' | '在庫' | '契約' | '登録' | '財務')
   const [saving, setSaving] = useState(false)
+  const [showStatusModal, setShowStatusModal] = useState(false)
+  const [showImageModal, setShowImageModal] = useState(false)
+  const [imageModalUrl, setImageModalUrl] = useState('')
 
   // 契約サブタブ
   const [contractSubTab, setContractSubTab] = useState<'契約情報' | '納車管理'>(() => {
@@ -109,6 +112,12 @@ export default function VehicleDetailPage() {
   }
 
   useEffect(() => { fetchVehicle(); fetchTransactions(); fetchDelivery() }, [id])
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') { setShowStatusModal(false); setShowImageModal(false) } }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   // ---- 車両操作 ----
   const updateVehicle = async (fields: Record<string, any>) => {
@@ -239,9 +248,9 @@ export default function VehicleDetailPage() {
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <Link href="/vehicles" style={{ padding: '7px 14px', background: '#f1f3f4', color: '#555', borderRadius: '8px', textDecoration: 'none', fontSize: '13px' }}>← 一覧</Link>
-            <Link href={`/negotiations/new?vehicle=${v.id}`} style={{ padding: '7px 14px', background: '#00a86b', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>商談登録</Link>
-            <Link href={`/vehicles/${v.id}/edit`} style={{ padding: '7px 14px', background: '#0070f3', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>編集</Link>
-            <Link href={`/vehicles/${v.id}/purchase-contract`} style={{ padding: '7px 14px', background: '#e65100', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>📋 買取契約書</Link>
+            <button onClick={() => setShowStatusModal(true)} style={{ padding: '7px 14px', background: '#f1f3f4', color: '#555', borderRadius: '8px', border: 'none', fontSize: '13px', cursor: 'pointer', fontWeight: 500 }}>ステータス変更</button>
+            <Link href={`/vehicles/${v.id}/estimate`} style={{ padding: '7px 14px', background: '#00a86b', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>見積作成</Link>
+            <Link href={`/negotiations/new?vehicle=${v.id}`} style={{ padding: '7px 14px', background: '#0070f3', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>販売商談作成</Link>
           </div>
         </div>
         <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #f0f0f0' }}>
@@ -288,12 +297,18 @@ export default function VehicleDetailPage() {
             {v.image_urls?.length > 0 ? (
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                 {v.image_urls.map((url: string, i: number) => (
-                  <img key={i} src={url} alt="" style={{ width: '80px', height: '60px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #eee', cursor: 'pointer' }} onClick={() => setMainImg(i)} />
+                  <img key={i} src={url} alt="" style={{ width: '80px', height: '60px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #eee', cursor: 'pointer' }}
+                    onClick={() => { setImageModalUrl(url); setShowImageModal(true) }} />
                 ))}
               </div>
             ) : (
               <div style={{ padding: '2rem', textAlign: 'center', color: '#ccc', fontSize: '13px', background: '#fafafa', borderRadius: '8px' }}>写真なし</div>
             )}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Link href={`/vehicles/${v.id}/purchase-contract`} style={{ padding: '10px 20px', background: '#e65100', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>
+              📋 買取契約書を作成
+            </Link>
           </div>
         </div>
       )}
@@ -345,7 +360,8 @@ export default function VehicleDetailPage() {
             </div>
             {v.image_urls?.length > 0 ? (
               <div>
-                <img src={v.image_urls[mainImg]} alt="メイン" style={{ width: '100%', height: '280px', objectFit: 'cover', borderRadius: '10px', marginBottom: '10px', border: '1px solid #eee' }} />
+                <img src={v.image_urls[mainImg]} alt="メイン" onClick={() => { setImageModalUrl(v.image_urls[mainImg]); setShowImageModal(true) }}
+                  style={{ width: '100%', height: '280px', objectFit: 'cover', borderRadius: '10px', marginBottom: '10px', border: '1px solid #eee', cursor: 'zoom-in' }} />
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   {v.image_urls.map((url: string, i: number) => (
                     <img key={i} src={url} alt="" onClick={() => setMainImg(i)}
@@ -655,6 +671,42 @@ export default function VehicleDetailPage() {
               </table>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ===== ステータス変更モーダル ===== */}
+      {showStatusModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}
+          onClick={() => setShowStatusModal(false)}>
+          <div style={{ background: 'white', borderRadius: '16px', width: '320px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>ステータス変更</h2>
+              <button onClick={() => setShowStatusModal(false)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#888' }}>×</button>
+            </div>
+            <div style={{ padding: '16px 24px 24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {(['在庫中', '商談中', '売約済', '納車済'] as const).map(s => {
+                const cfg = STATUS_COLOR[s]
+                const isCurrent = v.status === s
+                return (
+                  <button key={s} onClick={async () => { await updateVehicle({ status: s }); setShowStatusModal(false) }}
+                    style={{ padding: '12px 16px', borderRadius: '10px', border: `2px solid ${isCurrent ? cfg.color : '#eee'}`, background: isCurrent ? cfg.bg : 'white', color: isCurrent ? cfg.color : '#555', fontSize: '14px', fontWeight: isCurrent ? 700 : 500, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {isCurrent && <span>✓</span>}{s}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== 画像拡大モーダル ===== */}
+      {showImageModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300 }}
+          onClick={() => setShowImageModal(false)}>
+          <button onClick={() => setShowImageModal(false)} style={{ position: 'absolute', top: '16px', right: '20px', background: 'none', border: 'none', color: 'white', fontSize: '32px', cursor: 'pointer', lineHeight: 1 }}>×</button>
+          <img src={imageModalUrl} alt="拡大" onClick={e => { e.stopPropagation(); window.open(imageModalUrl, '_blank') }}
+            style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: '8px', cursor: 'zoom-in' }} />
+          <div style={{ position: 'absolute', bottom: '20px', color: 'rgba(255,255,255,0.6)', fontSize: '12px' }}>クリックで原寸大表示　ESCで閉じる</div>
         </div>
       )}
 

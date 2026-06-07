@@ -13,6 +13,13 @@ const STATUS_CONFIG: Record<string, { bg: string; color: string; dot: string }> 
 
 const STATUSES = ['すべて', '商談中', '見積済', '成約', '失注']
 
+const CATEGORY_TABS = [
+  { label: 'すべて',      value: 'all',      color: '#111',    dot: '#888' },
+  { label: '仕入商談',   value: 'purchase', color: '#1e7e34', dot: '#34a853' },
+  { label: '販売商談',   value: 'sales',    color: '#1a73e8', dot: '#4285f4' },
+  { label: 'その他商談', value: 'other',    color: '#e65100', dot: '#fb8c00' },
+]
+
 const SOURCE_MAP: Record<string, string> = {
   carsensor: 'カーセンサー', goo: 'グーネット', hp: 'HP', x: 'X',
   instagram: 'Instagram', youtube: 'YouTube', line: 'LINE',
@@ -22,8 +29,9 @@ const SOURCE_MAP: Record<string, string> = {
 export default function NegotiationsPage() {
   const [negotiations, setNegotiations] = useState<any[]>([])
   const [loading, setLoading]           = useState(true)
-  const [filterStatus, setFilterStatus] = useState('すべて')
-  const [search, setSearch]             = useState('')
+  const [filterStatus, setFilterStatus]     = useState('すべて')
+  const [filterCategory, setFilterCategory] = useState('all')
+  const [search, setSearch]                 = useState('')
   const { isAdmin } = useProfile()
 
   const load = async () => {
@@ -45,14 +53,15 @@ export default function NegotiationsPage() {
   }
 
   const filtered = negotiations.filter(n => {
-    const matchStatus = filterStatus === 'すべて' || n.status === filterStatus
+    const matchStatus   = filterStatus === 'すべて' || n.status === filterStatus
+    const matchCategory = filterCategory === 'all' || n.category === filterCategory
     const matchSearch = !search ||
       (n.customers?.氏名           ?? '').includes(search) ||
       (n.vehicles?.master_models?.name ?? '').includes(search) ||
       (n.vehicles?.master_makers?.name ?? '').includes(search) ||
       (n.vehicles?.db_number       ?? '').includes(search) ||
       (n.assigned_to               ?? '').includes(search)
-    return matchStatus && matchSearch
+    return matchStatus && matchCategory && matchSearch
   })
 
   const statusCounts = STATUSES.reduce((acc, s) => {
@@ -80,6 +89,23 @@ export default function NegotiationsPage() {
 
       {/* フィルターバー */}
       <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '14px 16px', marginBottom: '16px' }}>
+
+        {/* カテゴリタブ */}
+        <div style={{ display: 'flex', gap: '4px', marginBottom: '12px', background: '#f1f3f4', borderRadius: '10px', padding: '4px', width: 'fit-content' }}>
+          {CATEGORY_TABS.map(ct => {
+            const active = filterCategory === ct.value
+            return (
+              <button key={ct.value} onClick={() => setFilterCategory(ct.value)} style={{
+                padding: '6px 18px', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                background: active ? ct.color : 'transparent',
+                color: active ? 'white' : '#888',
+                boxShadow: active ? '0 1px 4px rgba(0,0,0,0.15)' : 'none',
+              }}>
+                {ct.label}
+              </button>
+            )
+          })}
+        </div>
 
         {/* ステータスタブ */}
         <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>

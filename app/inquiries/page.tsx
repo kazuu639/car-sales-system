@@ -66,6 +66,7 @@ export default function InquiriesPage() {
   const goToNegotiation = (inq: any) => {
     const params = new URLSearchParams({
       from_inquiry: inq.id,
+      category: inq.category || 'sales',
       customer_name: inq.customer_name,
       phone: inq.phone || '',
       source: inq.source || '',
@@ -75,6 +76,12 @@ export default function InquiriesPage() {
       notes: inq.memo || '',
     })
     router.push(`/negotiations/new?${params}`)
+  }
+
+  const NEG_BUTTON: Record<string, { label: string; color: string; bg: string }> = {
+    purchase: { label: '仕入商談へ',   color: '#1e7e34', bg: '#e6f4ea' },
+    sales:    { label: '販売商談へ',   color: '#1a73e8', bg: '#e8f0fe' },
+    other:    { label: 'その他商談へ', color: '#e65100', bg: '#fff3e0' },
   }
 
   const fetchInquiries = async () => {
@@ -298,12 +305,16 @@ export default function InquiriesPage() {
                     <td style={{ padding: '12px 16px' }}>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                         <button onClick={() => openEdit(inq)} style={{ fontSize: '12px', color: '#0070f3', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>編集</button>
-                        {inq.category === 'purchase' && (
-                          <button onClick={() => goToNegotiation(inq)}
-                            style={{ fontSize: '11px', color: '#1e7e34', background: '#e6f4ea', border: 'none', borderRadius: '6px', cursor: 'pointer', padding: '3px 8px', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                            商談へ
-                          </button>
-                        )}
+                        {(() => {
+                          const btn = NEG_BUTTON[inq.category]
+                          if (!btn) return null
+                          return (
+                            <button onClick={() => goToNegotiation(inq)}
+                              style={{ fontSize: '11px', color: btn.color, background: btn.bg, border: 'none', borderRadius: '6px', cursor: 'pointer', padding: '3px 8px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                              {btn.label}
+                            </button>
+                          )
+                        })()}
                         {isAdmin && (
                           <button onClick={() => handleDelete(inq.id, inq.customer_name)} style={{ fontSize: '12px', color: '#e53e3e', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>削除</button>
                         )}
