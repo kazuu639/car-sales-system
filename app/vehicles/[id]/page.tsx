@@ -1,25 +1,24 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { useProfile } from '@/hooks/useProfile'
 
-const CATEGORIES = [
-  { value: '1-1', label: '仕入金額',     direction: 'out', color: '#e53e3e', bg: '#fff5f5' },
-  { value: '2-1', label: '仕入経費',     direction: 'out', color: '#e65100', bg: '#fff3e0' },
-  { value: '2-2', label: '在庫経費',     direction: 'out', color: '#e65100', bg: '#fff3e0' },
-  { value: '2-3', label: '販売経費',     direction: 'out', color: '#e65100', bg: '#fff3e0' },
-  { value: '3-1', label: '売上',         direction: 'in',  color: '#1e7e34', bg: '#e6f4ea' },
-  { value: '3-2', label: '売上雑収入',   direction: 'in',  color: '#1e7e34', bg: '#e6f4ea' },
-  { value: '4-1', label: '納車後入出金', direction: 'both',color: '#1a73e8', bg: '#e8f0fe' },
-]
-const CAT_MAP = Object.fromEntries(CATEGORIES.map(c => [c.value, c]))
+const CAT_COLOR: Record<string, { bg: string; color: string }> = {
+  '売上':     { bg: '#e6f4ea', color: '#1e7e34' },
+  '仕入':     { bg: '#fff5f5', color: '#e53e3e' },
+  '経費':     { bg: '#fff3e0', color: '#e65100' },
+  '車両経費': { bg: '#fff3e0', color: '#e65100' },
+  '販売経費': { bg: '#fff3e0', color: '#e65100' },
+  '税金':     { bg: '#f3e5f5', color: '#7b1fa2' },
+  'その他':   { bg: '#f1f3f4', color: '#5f6368' },
+}
 
-type Transaction = {
-  id: string; vehicle_id: string; category: string; label: string | null
-  amount: number; direction: string; payment_method: string | null
-  transaction_date: string | null; memo: string | null
+type TxRecord = {
+  id: string; vehicle_id: string | null; date: string | null
+  type: 'in' | 'out'; category: string | null; subcategory: string | null
+  amount: number; note: string | null; account_id: string | null
 }
 
 const STATUS_COLOR: Record<string, { bg: string; color: string }> = {
@@ -34,20 +33,11 @@ export default function VehicleDetailPage() {
   const { isAdmin } = useProfile()
   const [v, setV] = useState<any>(null)
   const [mainImg, setMainImg] = useState(0)
-  const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [tab, setTab] = useState<'仕入' | '在庫' | '契約' | '登録' | '財務'>(() => {
-    if (typeof window !== 'undefined') {
-      const t = new URLSearchParams(window.location.search).get('tab')
-      if (t === '仕入' || t === '在庫' || t === '契約' || t === '登録' || t === '財務') return t
-    }
-    return '在庫'
-  })
-  const [showTxModal, setShowTxModal] = useState(false)
+  const [transactions, setTransactions] = useState<TxRecord[]>([])
+  const searchParams = useSearchParams()
+  const initialTab = searchParams.get('tab') || '在庫'
+  const [tab, setTab] = useState<'仕入' | '在庫' | '契約' | '登録' | '財務'>(initialTab as '仕入' | '在庫' | '契約' | '登録' | '財務')
   const [saving, setSaving] = useState(false)
-  const [txForm, setTxForm] = useState({
-    category: '1-1', label: '', amount: '', direction: 'out',
-    payment_method: 'bank', transaction_date: new Date().toISOString().split('T')[0], memo: '',
-  })
 
   // 契約サブタブ
   const [contractSubTab, setContractSubTab] = useState<'契約情報' | '納車管理'>(() => {
@@ -74,9 +64,9 @@ export default function VehicleDetailPage() {
   }
 
   const fetchTransactions = async () => {
-    const { data } = await supabase.from('vehicle_transactions').select('*')
-      .eq('vehicle_id', id as string).order('transaction_date', { ascending: true })
-    setTransactions(data || [])
+    const { data } = await supabase.from('transactions').select('*')
+      .eq('vehicle_id', id as string).order('date', { ascending: false })
+    setTransactions((data || []) as TxRecord[])
   }
 
   const fetchDelivery = async () => {
@@ -135,32 +125,8 @@ export default function VehicleDetailPage() {
     window.location.href = '/vehicles'
   }
 
-  // ---- 財務明細 ----
-  const handleSaveTx = async () => {
-    if (!txForm.amount) return alert('金額を入力してください')
-    await supabase.from('vehicle_transactions').insert({
-      vehicle_id: id as string,
-      category: txForm.category,
-      label: txForm.label || CAT_MAP[txForm.category]?.label,
-      amount: parseInt(txForm.amount),
-      direction: txForm.direction,
-      payment_method: txForm.payment_method,
-      transaction_date: txForm.transaction_date || null,
-      memo: txForm.memo || null,
-    })
-    setShowTxModal(false)
-    setTxForm({ category: '1-1', label: '', amount: '', direction: 'out', payment_method: 'bank', transaction_date: new Date().toISOString().split('T')[0], memo: '' })
-    fetchTransactions()
-  }
-
-  const deleteTx = async (txId: string) => {
-    if (!confirm('削除しますか？')) return
-    await supabase.from('vehicle_transactions').delete().eq('id', txId)
-    fetchTransactions()
-  }
-
-  const totalIn    = transactions.filter(t => t.direction === 'in').reduce((s, t) => s + t.amount, 0)
-  const totalOut   = transactions.filter(t => t.direction === 'out').reduce((s, t) => s + t.amount, 0)
+  const totalIn     = transactions.filter(t => t.type === 'in').reduce((s, t) => s + t.amount, 0)
+  const totalOut    = transactions.filter(t => t.type === 'out').reduce((s, t) => s + t.amount, 0)
   const grossProfit = totalIn - totalOut
 
   // ---- 納車管理操作 ----
@@ -631,8 +597,8 @@ export default function VehicleDetailPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
             {[
-              { label: '総入金', value: totalIn,    color: '#1e7e34' },
-              { label: '総出金', value: totalOut,   color: '#e53e3e' },
+              { label: '総入金',   value: totalIn,     color: '#1e7e34' },
+              { label: '総出金',   value: totalOut,    color: '#e53e3e' },
               { label: '確定粗利', value: grossProfit, color: grossProfit >= 0 ? '#1a73e8' : '#e65100' },
             ].map(k => (
               <div key={k.label} style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px', textAlign: 'center' }}>
@@ -646,12 +612,9 @@ export default function VehicleDetailPage() {
           <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h3 style={{ fontSize: '14px', fontWeight: 600, margin: 0 }}>入出金明細</h3>
-              <button onClick={() => {
-                setTxForm({ category: '1-1', label: '仕入金額', amount: '', direction: 'out', payment_method: 'bank', transaction_date: new Date().toISOString().split('T')[0], memo: '' })
-                setShowTxModal(true)
-              }} style={{ padding: '7px 16px', background: '#0070f3', color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', fontWeight: 500 }}>
-                ＋ 明細追加
-              </button>
+              <Link href="/accounting" style={{ padding: '7px 16px', background: '#0070f3', color: 'white', borderRadius: '8px', fontSize: '13px', fontWeight: 500, textDecoration: 'none' }}>
+                ＋ 明細追加（仮想BK）
+              </Link>
             </div>
             {transactions.length === 0 ? (
               <div style={{ padding: '2rem', textAlign: 'center', color: '#ccc', fontSize: '13px' }}>明細がありません</div>
@@ -659,111 +622,38 @@ export default function VehicleDetailPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                 <thead>
                   <tr style={{ background: '#f8f9fa', borderBottom: '1px solid #eee' }}>
-                    {['日付', '区分', '内容', '入出金', '金額', '支払方法', 'メモ', ''].map(h => (
+                    {['日付', '入出金', 'カテゴリ', 'サブカテゴリ', '金額', '備考'].map(h => (
                       <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#888', fontWeight: 600 }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {transactions.map((tx, i) => (
-                    <tr key={tx.id} style={{ borderBottom: i < transactions.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
-                      <td style={{ padding: '10px 12px', color: '#888' }}>{tx.transaction_date || '—'}</td>
-                      <td style={{ padding: '10px 12px' }}>
-                        <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '20px', fontWeight: 600, background: CAT_MAP[tx.category]?.bg, color: CAT_MAP[tx.category]?.color }}>{tx.category}</span>
-                      </td>
-                      <td style={{ padding: '10px 12px' }}>{tx.label || CAT_MAP[tx.category]?.label}</td>
-                      <td style={{ padding: '10px 12px' }}>
-                        <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '20px', background: tx.direction === 'in' ? '#e6f4ea' : '#fce8e6', color: tx.direction === 'in' ? '#1e7e34' : '#e53e3e', fontWeight: 600 }}>
-                          {tx.direction === 'in' ? '入金' : '出金'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '10px 12px', fontWeight: 600, color: tx.direction === 'in' ? '#1e7e34' : '#e53e3e' }}>
-                        {tx.direction === 'in' ? '+' : '-'}¥{tx.amount.toLocaleString()}
-                      </td>
-                      <td style={{ padding: '10px 12px', color: '#888' }}>{tx.payment_method === 'cash' ? '現金' : '銀行'}</td>
-                      <td style={{ padding: '10px 12px', color: '#888' }}>{tx.memo || '—'}</td>
-                      <td style={{ padding: '10px 12px' }}>
-                        <button onClick={() => deleteTx(tx.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ddd', fontSize: '14px' }}
-                          onMouseEnter={e => (e.currentTarget.style.color = '#e53e3e')}
-                          onMouseLeave={e => (e.currentTarget.style.color = '#ddd')}>×</button>
-                      </td>
-                    </tr>
-                  ))}
+                  {transactions.map((tx, i) => {
+                    const cfg = CAT_COLOR[tx.category ?? ''] ?? { bg: '#f1f3f4', color: '#888' }
+                    return (
+                      <tr key={tx.id} style={{ borderBottom: i < transactions.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
+                        <td style={{ padding: '10px 12px', color: '#888' }}>{tx.date || '—'}</td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '20px', fontWeight: 600, background: tx.type === 'in' ? '#e6f4ea' : '#fce8e6', color: tx.type === 'in' ? '#1e7e34' : '#e53e3e' }}>
+                            {tx.type === 'in' ? '入金' : '出金'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          {tx.category ? (
+                            <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '20px', fontWeight: 600, background: cfg.bg, color: cfg.color }}>{tx.category}</span>
+                          ) : <span style={{ color: '#ccc' }}>—</span>}
+                        </td>
+                        <td style={{ padding: '10px 12px', color: '#666' }}>{tx.subcategory || '—'}</td>
+                        <td style={{ padding: '10px 12px', fontWeight: 600, color: tx.type === 'in' ? '#1e7e34' : '#e53e3e' }}>
+                          {tx.type === 'in' ? '+' : '-'}¥{tx.amount.toLocaleString()}
+                        </td>
+                        <td style={{ padding: '10px 12px', color: '#888' }}>{tx.note || '—'}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* 明細追加モーダル */}
-      {showTxModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
-          <div style={{ background: 'white', borderRadius: '16px', width: '100%', maxWidth: '480px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-            <div style={{ padding: '20px 24px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>明細追加</h2>
-              <button onClick={() => setShowTxModal(false)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#888' }}>×</button>
-            </div>
-            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ fontSize: '12px', color: '#888', fontWeight: 500 }}>区分</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
-                  {CATEGORIES.map(c => (
-                    <button key={c.value} onClick={() => {
-                      const cat = CAT_MAP[c.value]
-                      setTxForm(f => ({ ...f, category: c.value, direction: cat.direction === 'both' ? 'out' : cat.direction, label: c.label }))
-                    }} style={{ padding: '5px 12px', borderRadius: '20px', border: 'none', fontSize: '12px', fontWeight: 500, cursor: 'pointer', background: txForm.category === c.value ? c.color : c.bg, color: txForm.category === c.value ? 'white' : c.color }}>
-                      {c.value} {c.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {CAT_MAP[txForm.category]?.direction === 'both' && (
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  {['in', 'out'].map(d => (
-                    <button key={d} onClick={() => setTxForm(f => ({ ...f, direction: d }))} style={{ flex: 1, padding: '7px', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 500, cursor: 'pointer', background: txForm.direction === d ? (d === 'in' ? '#1e7e34' : '#e53e3e') : '#f1f3f4', color: txForm.direction === d ? 'white' : '#555' }}>
-                      {d === 'in' ? '入金' : '出金'}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ fontSize: '12px', color: '#888', fontWeight: 500 }}>内容</label>
-                  <input type="text" value={txForm.label} onChange={e => setTxForm(f => ({ ...f, label: e.target.value }))} placeholder={CAT_MAP[txForm.category]?.label}
-                    style={{ width: '100%', border: '1px solid #ddd', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', marginTop: '4px', boxSizing: 'border-box' }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: '12px', color: '#888', fontWeight: 500 }}>金額（円）*</label>
-                  <input type="number" value={txForm.amount} onChange={e => setTxForm(f => ({ ...f, amount: e.target.value }))} placeholder="0"
-                    style={{ width: '100%', border: '1px solid #ddd', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', marginTop: '4px', boxSizing: 'border-box' }} />
-                </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ fontSize: '12px', color: '#888', fontWeight: 500 }}>日付</label>
-                  <input type="date" value={txForm.transaction_date} onChange={e => setTxForm(f => ({ ...f, transaction_date: e.target.value }))}
-                    style={{ width: '100%', border: '1px solid #ddd', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', marginTop: '4px', boxSizing: 'border-box' }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: '12px', color: '#888', fontWeight: 500 }}>支払方法</label>
-                  <select value={txForm.payment_method} onChange={e => setTxForm(f => ({ ...f, payment_method: e.target.value }))}
-                    style={{ width: '100%', border: '1px solid #ddd', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', marginTop: '4px', boxSizing: 'border-box' }}>
-                    <option value="bank">銀行（仮想BK）</option>
-                    <option value="cash">現金金庫</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label style={{ fontSize: '12px', color: '#888', fontWeight: 500 }}>メモ</label>
-                <input type="text" value={txForm.memo} onChange={e => setTxForm(f => ({ ...f, memo: e.target.value }))} placeholder="備考など"
-                  style={{ width: '100%', border: '1px solid #ddd', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', marginTop: '4px', boxSizing: 'border-box' }} />
-              </div>
-            </div>
-            <div style={{ padding: '16px 24px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-              <button onClick={() => setShowTxModal(false)} style={{ padding: '10px 20px', background: '#f1f3f4', color: '#555', borderRadius: '8px', border: 'none', fontSize: '14px', cursor: 'pointer' }}>キャンセル</button>
-              <button onClick={handleSaveTx} style={{ padding: '10px 20px', background: '#0070f3', color: 'white', borderRadius: '8px', border: 'none', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>保存</button>
-            </div>
           </div>
         </div>
       )}
