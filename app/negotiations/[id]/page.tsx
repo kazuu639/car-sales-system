@@ -35,7 +35,7 @@ export default function NegotiationDetailPage() {
 
   const fetchData = async () => {
     const [neg, nv, av] = await Promise.all([
-      supabase.from('negotiations').select('*, customers(氏名, 電話番号, メール)').eq('id', id).single(),
+      supabase.from('negotiations').select('*, customers(*)').eq('id', id).single(),
       supabase.from('negotiation_vehicles').select('*, vehicles(id, db_number, year, mileage, master_makers(name), master_models(name), body_price, image_urls)').eq('negotiation_id', id),
       supabase.from('vehicles').select('*, master_makers(name), master_models(name)').eq('status', '在庫中'),
     ])
