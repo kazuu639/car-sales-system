@@ -33,7 +33,9 @@ export default function UserMenu() {
     part: 'バイト・パート',
   }
 
-  if (!profile) return null
+  if (!profile) return (
+    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#e5e7eb' }} />
+  )
 
   return (
     <div style={{ position: 'relative' }}>

@@ -272,7 +272,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
 
           {/* ナビ */}
-          <nav style={{ padding: '8px', flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+          <nav style={{ padding: '8px', flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
             {!collapsed && <div style={{ fontSize: '10px', color: '#bbb', padding: '6px 8px 4px', fontWeight: 600, letterSpacing: '0.05em' }}>メイン</div>}
             {NAV_ITEMS.map(item => <NavLink key={item.href} {...item} />)}
             <div style={{ height: '8px' }} />
