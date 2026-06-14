@@ -89,7 +89,8 @@ export default function NegotiationPurchaseContractPage() {
 
       if (c) {
         setContract(c)
-        setForm({
+        setForm((f) => ({
+          ...f,
           seller_name:          c.seller_name          ?? '',
           seller_name_kana:     c.seller_name_kana     ?? '',
           seller_birthday:      c.seller_birthday      ?? '',
@@ -115,7 +116,7 @@ export default function NegotiationPurchaseContractPage() {
           bank_account_number:  c.bank_account_number  ?? '',
           bank_account_name:    c.bank_account_name    ?? '',
           notes:                c.notes                ?? '',
-        })
+        }))
       } else if (neg) {
         // 商談・買取車両情報からプリセット
         setForm(f => ({
