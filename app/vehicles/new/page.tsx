@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 const STEPS = ['基本情報', '仕入先', '金額', '画像・確認']
 
@@ -9,10 +10,11 @@ export default function NewVehiclePage() {
   const router = useRouter()
   const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [loadingOverlay, setLoadingOverlay] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('処理中...')
   const [images, setImages] = useState<File[]>([])
   const [previews, setPreviews] = useState<string[]>([])
 
-  const [countries, setCountries] = useState<any[]>([])
   const [makers, setMakers] = useState<any[]>([])
   const [models, setModels] = useState<any[]>([])
   const [colors, setColors] = useState<any[]>([])
@@ -33,8 +35,7 @@ export default function NewVehiclePage() {
 
   useEffect(() => {
     const fetchAll = async () => {
-      const [c, m, mo, col, cu, d, av] = await Promise.all([
-        supabase.from('master_countries').select('*').order('sort_order'),
+      const [m, mo, col, cu, d, av] = await Promise.all([
         supabase.from('master_makers').select('*').order('sort_order'),
         supabase.from('master_models').select('*').order('sort_order'),
         supabase.from('master_colors').select('*').order('sort_order'),
@@ -42,10 +43,10 @@ export default function NewVehiclePage() {
         supabase.from('dealers').select('*').order('作成日時', { ascending: false }),
         supabase.from('auction_venues').select('*').order('作成日時', { ascending: false }),
       ])
-      setCountries(c.data ?? [])
       setMakers(m.data ?? [])
       setModels(mo.data ?? [])
       setColors(col.data ?? [])
+      setFilteredMakers(m.data ?? [])  // 最初から全メーカーを表示
       setCustomers(cu.data ?? [])
       setDealers(d.data ?? [])
       setAuctionVenues(av.data ?? [])
@@ -71,14 +72,11 @@ export default function NewVehiclePage() {
   const handleChange = (e: any) => {
     const { name, value, type, checked } = e.target
     const newForm = { ...form, [name]: type === 'checkbox' ? checked : value }
-    if (name === 'country_id') {
-      newForm.maker_id = ''
-      newForm.model_id = ''
-      setFilteredMakers(makers.filter(m => m.country_id === value))
-      setFilteredModels([])
-    }
     if (name === 'maker_id') {
       newForm.model_id = ''
+      // メーカーの country_id を自動セット
+      const selectedMaker = makers.find(m => m.id === value)
+      if (selectedMaker) newForm.country_id = selectedMaker.country_id
       setFilteredModels(models.filter(m => m.maker_id === value))
     }
     setForm(newForm)
@@ -91,6 +89,8 @@ export default function NewVehiclePage() {
   }
 
   const handleSubmit = async () => {
+    setLoadingMessage('登録中...')
+    setLoadingOverlay(true)
     setLoading(true)
     const { data: vehicle, error } = await supabase.from('vehicles').insert([{
       db_number: form.db_number,
@@ -117,6 +117,7 @@ export default function NewVehiclePage() {
 
     if (error || !vehicle) {
       alert('エラー: ' + error?.message)
+      setLoadingOverlay(false)
       setLoading(false)
       return
     }
@@ -134,6 +135,7 @@ export default function NewVehiclePage() {
     if (urls.length > 0) {
       await supabase.from('vehicles').update({ image_urls: urls }).eq('id', vehicle.id)
     }
+    setLoadingOverlay(false)
     setLoading(false)
     router.push('/vehicles')
   }
@@ -149,6 +151,7 @@ export default function NewVehiclePage() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '640px', margin: '0 auto' }}>
+      {loadingOverlay && <LoadingOverlay message={loadingMessage} />}
       <a href="/vehicles" style={{ fontSize: '13px', color: '#888', textDecoration: 'none' }}>← 在庫一覧に戻る</a>
       <h1 style={{ fontSize: '22px', fontWeight: 700, margin: '8px 0 1.5rem' }}>車両登録</h1>
 
@@ -182,16 +185,9 @@ export default function NewVehiclePage() {
               </div>
             </div>
             <div>
-              <label style={lbl}>国</label>
-              <select name="country_id" value={form.country_id} onChange={handleChange} style={sel}>
-                <option value="">選択してください</option>
-                {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            <div>
               <label style={lbl}>メーカー</label>
-              <select name="maker_id" value={form.maker_id} onChange={handleChange} style={sel} disabled={!form.country_id}>
-                <option value="">国を選択してください</option>
+              <select name="maker_id" value={form.maker_id} onChange={handleChange} style={sel}>
+                <option value="">選択してください</option>
                 {filteredMakers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </div>

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 export default function ContractPage() {
   const { id } = useParams()
@@ -12,6 +13,8 @@ export default function ContractPage() {
   const [customer, setCustomer] = useState<any>(null)
   const [quote, setQuote] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingOverlay, setLoadingOverlay] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('処理中...')
 
   const [form, setForm] = useState({
     contract_date: new Date().toISOString().split('T')[0],
@@ -44,6 +47,8 @@ export default function ContractPage() {
   }, [id])
 
   const handleSubmit = async () => {
+    setLoadingMessage('登録中...')
+    setLoadingOverlay(true)
     setLoading(true)
     const { data: contract, error } = await supabase.from('contracts').insert([{
       negotiation_id: id as string,
@@ -57,8 +62,9 @@ export default function ContractPage() {
       notes: form.notes,
     }]).select().single()
 
-    if (error) { alert('エラー: ' + error.message); setLoading(false); return }
+    if (error) { alert('エラー: ' + error.message); setLoadingOverlay(false); setLoading(false); return }
 
+    setLoadingOverlay(false)
     router.push(`/negotiations/${id}/contract/preview?contract_id=${contract.id}`)
   }
 
@@ -70,6 +76,7 @@ export default function ContractPage() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
+      {loadingOverlay && <LoadingOverlay message={loadingMessage} />}
       <div style={{ marginBottom: '1.5rem' }}>
         <Link href={`/negotiations/${id}`} style={{ fontSize: '13px', color: '#888', textDecoration: 'none' }}>← 商談に戻る</Link>
         <h1 style={{ fontSize: '22px', fontWeight: 700, margin: '8px 0 0' }}>契約書作成</h1>

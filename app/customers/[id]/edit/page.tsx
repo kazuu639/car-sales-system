@@ -3,11 +3,14 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 export default function EditCustomerPage() {
   const { id } = useParams()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [loadingOverlay, setLoadingOverlay] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('処理中...')
   const [form, setForm] = useState({
     氏名: '',
     氏名カナ: '',
@@ -41,13 +44,16 @@ export default function EditCustomerPage() {
 
   const handleSubmit = async () => {
     if (!form.氏名) { alert('氏名は必須です'); return }
+    setLoadingMessage('登録中...')
+    setLoadingOverlay(true)
     setLoading(true)
     const { error } = await supabase.from('customers').update({
       ...form,
       生年月日: form.生年月日 || null,
       更新日時: new Date().toISOString(),
     }).eq('id', id)
-    if (error) { alert('エラー: ' + error.message); setLoading(false); return }
+    if (error) { alert('エラー: ' + error.message); setLoadingOverlay(false); setLoading(false); return }
+    setLoadingOverlay(false)
     router.push(`/customers/${id}`)
   }
 
@@ -66,6 +72,7 @@ export default function EditCustomerPage() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '700px', margin: '0 auto' }}>
+      {loadingOverlay && <LoadingOverlay message={loadingMessage} />}
       <div style={{ marginBottom: '1.5rem' }}>
         <Link href={`/customers/${id}`} style={{ fontSize: '13px', color: '#888', textDecoration: 'none' }}>← 詳細に戻る</Link>
         <h1 style={{ fontSize: '22px', fontWeight: 700, margin: '8px 0 0' }}>顧客編集</h1>

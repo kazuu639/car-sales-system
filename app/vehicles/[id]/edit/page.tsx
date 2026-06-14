@@ -4,12 +4,15 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 export default function EditVehiclePage() {
   const router = useRouter()
   const params = useParams()
   const id = params.id as string
   const [loading, setLoading] = useState(false)
+  const [loadingOverlay, setLoadingOverlay] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('処理中...')
   const [form, setForm] = useState<any>(null)
 
   useEffect(() => {
@@ -23,6 +26,10 @@ export default function EditVehiclePage() {
   }
 
   const handleSubmit = async () => {
+    setLoadingMessage('保存中...')
+    setLoadingOverlay(true)
+    setLoadingMessage('保存中...')
+    setLoadingOverlay(true)
     setLoading(true)
     const { error } = await supabase.from('vehicles').update({
       status: form.status,
@@ -44,6 +51,7 @@ export default function EditVehiclePage() {
       total_price: form.total_price ? parseInt(form.total_price) : null,
       repair_history: form.repair_history ?? false,
     }).eq('id', id)
+    setLoadingOverlay(false)
     setLoading(false)
     if (!error) router.push(`/vehicles/${id}`)
     else alert('エラー: ' + error.message)
@@ -59,6 +67,7 @@ export default function EditVehiclePage() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
+      {loadingOverlay && <LoadingOverlay message={loadingMessage} />}
       <Link href={`/vehicles/${id}`} style={{ fontSize: '13px', color: '#0070f3', textDecoration: 'none' }}>← 詳細に戻る</Link>
       <h1 style={{ fontSize: '22px', margin: '1rem 0 1.5rem' }}>車両編集</h1>
 

@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { useProfile } from '@/hooks/useProfile'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 const SOURCES = [
   { value: 'carsensor', label: 'カーセンサー', color: '#c0392b', bg: '#fde8e8' },
@@ -28,6 +29,8 @@ export default function NegotiationDetailPage() {
   const [negVehicles, setNegVehicles] = useState<any[]>([])
   const [allVehicles, setAllVehicles] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadingOverlay, setLoadingOverlay] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('処理中...')
   const [addingVehicle, setAddingVehicle] = useState(false)
   const [selectedVehicleId, setSelectedVehicleId] = useState('')
   const [editingInfo, setEditingInfo] = useState(false)
@@ -76,6 +79,8 @@ export default function NegotiationDetailPage() {
   }
 
   const handleSaveInfo = async () => {
+    setLoadingMessage('保存中...')
+    setLoadingOverlay(true)
     await supabase.from('negotiations').update({
       assigned_to: infoForm.assigned_to || null,
       source: infoForm.source || null,
@@ -83,6 +88,7 @@ export default function NegotiationDetailPage() {
       notes: infoForm.notes || null,
     }).eq('id', id as string)
     setEditingInfo(false)
+    setLoadingOverlay(false)
     fetchData()
   }
 
@@ -105,6 +111,7 @@ export default function NegotiationDetailPage() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
+      {loadingOverlay && <LoadingOverlay message={loadingMessage} />}
       {/* ヘッダー */}
       <div style={{ marginBottom: '1.5rem' }}>
         <Link href="/negotiations" style={{ fontSize: '13px', color: '#888', textDecoration: 'none' }}>← 商談一覧に戻る</Link>

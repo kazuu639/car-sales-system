@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 
@@ -101,10 +101,67 @@ const MANUAL_SECTIONS = [
 ]
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<'manual' | 'box' | 'estimate'>('manual')
+  const [tab, setTab] = useState<'manual' | 'box' | 'estimate' | 'masters' | 'display'>('manual')
   const [boxes, setBoxes] = useState<DocumentBox[]>([])
   const [openSection, setOpenSection] = useState<number | null>(0)
   const [loading, setLoading] = useState(false)
+  const [fontSize, setFontSize] = useState<'small' | 'medium' | 'large'>('medium')
+
+  // マスタ管理
+  const [masterTab, setMasterTab] = useState<'makers' | 'models' | 'colors' | 'countries' | 'expenses'>('makers')
+  const [countries, setCountries] = useState<any[]>([])
+  const [makers, setMakers] = useState<any[]>([])
+  const [models, setModels] = useState<any[]>([])
+  const [colors, setColors] = useState<any[]>([])
+  const [expenses, setExpenses] = useState<any[]>([])
+  const [expenseLoading, setExpenseLoading] = useState(false)
+  const [editingExpense, setEditingExpense] = useState<string | null>(null)
+  const [editingExpenseAmount, setEditingExpenseAmount] = useState('')
+  const [newName, setNewName] = useState('')
+  const [selectedCountry, setSelectedCountry] = useState('')
+  const [selectedMaker, setSelectedMaker] = useState('')
+  const [masterLoading, setMasterLoading] = useState(false)
+  const [masterSearch, setMasterSearch] = useState('')
+  const [modelMakerFilter, setModelMakerFilter] = useState('')
+  const [csvMessage, setCsvMessage] = useState('')
+  const csvInputRef = useRef<HTMLInputElement>(null)
+
+  const fetchExpenses = async () => {
+    setExpenseLoading(true)
+    const { data } = await supabase
+      .from('expense_master')
+      .select('*')
+      .order('sort_order')
+    setExpenses(data || [])
+    setExpenseLoading(false)
+  }
+
+  const fetchMasters = async () => {
+    const [c, m, mo, col] = await Promise.all([
+      supabase.from('master_countries').select('*').order('sort_order'),
+      supabase.from('master_makers').select('*, master_countries(name)').order('sort_order'),
+      supabase.from('master_models').select('*, master_makers(name)').order('sort_order'),
+      supabase.from('master_colors').select('*').order('sort_order'),
+    ])
+    setCountries(c.data ?? [])
+    setMakers(m.data ?? [])
+    setModels(mo.data ?? [])
+    setColors(col.data ?? [])
+  }
+
+  useEffect(() => {
+    const saved = localStorage.getItem('fontSize') as 'small' | 'medium' | 'large' | null
+    if (saved) setFontSize(saved)
+  }, [])
+
+  const handleFontSize = (size: 'small' | 'medium' | 'large') => {
+    setFontSize(size)
+    localStorage.setItem('fontSize', size)
+    document.documentElement.setAttribute('data-fontsize', size)
+    const zoom = size === 'small' ? '0.875' : size === 'large' ? '1.125' : '1'
+    document.documentElement.style.zoom = zoom
+    alert('文字サイズを変更しました')
+  }
 
   useEffect(() => {
     if (tab === 'box') {
@@ -114,9 +171,110 @@ export default function SettingsPage() {
         .order('box_number')
         .then(({ data }) => { setBoxes(data ?? []); setLoading(false) })
     }
+    if (tab === 'masters') { fetchMasters(); fetchExpenses() }
   }, [tab])
 
   const occupiedBoxes = boxes.filter(b => b.is_occupied).length
+
+  const handleMasterAdd = async () => {
+    if (!newName.trim()) return
+    setMasterLoading(true)
+    if (masterTab === 'countries') {
+      await supabase.from('master_countries').insert({ name: newName, sort_order: countries.length + 1 })
+    } else if (masterTab === 'makers') {
+      if (!selectedCountry) { alert('国を選択してください'); setMasterLoading(false); return }
+      await supabase.from('master_makers').insert({ name: newName, country_id: selectedCountry, sort_order: makers.length + 1 })
+    } else if (masterTab === 'models') {
+      if (!selectedMaker) { alert('メーカーを選択してください'); setMasterLoading(false); return }
+      await supabase.from('master_models').insert({ name: newName, maker_id: selectedMaker, sort_order: models.length + 1 })
+    } else if (masterTab === 'colors') {
+      await supabase.from('master_colors').insert({ name: newName, sort_order: colors.length + 1 })
+    }
+    setNewName('')
+    await fetchMasters()
+    setMasterLoading(false)
+  }
+
+  const handleMasterDelete = async (table: string, id: string) => {
+    if (!confirm('削除しますか？')) return
+    await (supabase.from(table as any) as any).delete().eq('id', id)
+    await fetchMasters()
+  }
+
+  const masterListData = masterTab === 'makers' ? makers : masterTab === 'models' ? models : masterTab === 'colors' ? colors : countries
+  const masterTableMap: Record<string, string> = { makers: 'master_makers', models: 'master_models', colors: 'master_colors', countries: 'master_countries' }
+
+  const filteredMasterList = masterListData.filter(item => {
+    const matchSearch = !masterSearch || item.name.toLowerCase().includes(masterSearch.toLowerCase())
+    const matchMaker = masterTab !== 'models' || !modelMakerFilter || item.maker_id === modelMakerFilter
+    return matchSearch && matchMaker
+  })
+
+  const handleCsvDownload = () => {
+    const fileNames: Record<string, string> = { makers: 'makers.csv', models: 'models.csv', colors: 'colors.csv', countries: 'countries.csv' }
+    let lines: string[]
+    if (masterTab === 'makers') {
+      lines = ['name,country_name', ...makers.map(m => `${m.name},${m.master_countries?.name ?? ''}`)]
+    } else if (masterTab === 'models') {
+      lines = ['name,maker_name', ...models.map(m => `${m.name},${m.master_makers?.name ?? ''}`)]
+    } else if (masterTab === 'colors') {
+      lines = ['name', ...colors.map(c => c.name)]
+    } else {
+      lines = ['name', ...countries.map(c => c.name)]
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = fileNames[masterTab]; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const text = await file.text()
+    const lines = text.trim().split('\n').slice(1).map(l => l.trim()).filter(Boolean)
+    let added = 0
+    if (masterTab === 'countries') {
+      const existing = new Set(countries.map(c => c.name.toLowerCase()))
+      for (const name of lines) {
+        if (existing.has(name.toLowerCase())) continue
+        await supabase.from('master_countries').insert({ name, sort_order: countries.length + added + 1 })
+        added++
+      }
+    } else if (masterTab === 'colors') {
+      const existing = new Set(colors.map(c => c.name.toLowerCase()))
+      for (const name of lines) {
+        if (existing.has(name.toLowerCase())) continue
+        await supabase.from('master_colors').insert({ name, sort_order: colors.length + added + 1 })
+        added++
+      }
+    } else if (masterTab === 'makers') {
+      const existing = new Set(makers.map(m => m.name.toLowerCase()))
+      for (const line of lines) {
+        const [name, countryName] = line.split(',').map(s => s.trim())
+        if (!name || existing.has(name.toLowerCase())) continue
+        const country = countries.find(c => c.name.toLowerCase() === (countryName ?? '').toLowerCase())
+        if (!country) continue
+        await supabase.from('master_makers').insert({ name, country_id: country.id, sort_order: makers.length + added + 1 })
+        added++
+      }
+    } else if (masterTab === 'models') {
+      const existing = new Set(models.map(m => m.name.toLowerCase()))
+      for (const line of lines) {
+        const [name, makerName] = line.split(',').map(s => s.trim())
+        if (!name || existing.has(name.toLowerCase())) continue
+        const maker = makers.find(m => m.name.toLowerCase() === (makerName ?? '').toLowerCase())
+        if (!maker) continue
+        await supabase.from('master_models').insert({ name, maker_id: maker.id, sort_order: models.length + added + 1 })
+        added++
+      }
+    }
+    if (csvInputRef.current) csvInputRef.current.value = ''
+    await fetchMasters()
+    setCsvMessage(`${added}件追加しました`)
+    setTimeout(() => setCsvMessage(''), 3000)
+  }
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
@@ -132,6 +290,8 @@ export default function SettingsPage() {
           { key: 'manual',   label: '📖 マニュアル' },
           { key: 'box',      label: '📁 書類BOX' },
           { key: 'estimate', label: '📝 見積テンプレート' },
+          { key: 'masters',  label: '🏷️ マスタ管理' },
+          { key: 'display',  label: '🖥️ 表示設定' },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key as any)} style={{
             padding: '7px 20px', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 500, cursor: 'pointer',
@@ -232,6 +392,221 @@ export default function SettingsPage() {
           <div style={{ display: 'inline-block', padding: '8px 20px', background: '#e8f0fe', color: '#1a73e8', borderRadius: '20px', fontSize: '12px', fontWeight: 500 }}>
             🚧 開発予定
           </div>
+        </div>
+      )}
+
+      {/* ===== マスタ管理タブ ===== */}
+      {tab === 'masters' && (
+        <div>
+          {/* サブタブ */}
+          <div style={{ display: 'flex', gap: '0', borderBottom: '1px solid #eee', marginBottom: '20px' }}>
+            {([
+              { key: 'makers',    label: 'メーカー管理' },
+              { key: 'models',    label: '車種管理' },
+              { key: 'colors',    label: '色マスタ' },
+              { key: 'countries', label: '国マスタ' },
+              { key: 'expenses', label: '諸費用マスタ' },
+            ] as const).map(t => (
+              <button key={t.key} onClick={() => { setMasterTab(t.key); setNewName(''); setSelectedCountry(''); setSelectedMaker(''); setMasterSearch(''); setModelMakerFilter('') }} style={{
+                padding: '10px 20px', background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: '14px', fontWeight: masterTab === t.key ? 600 : 400,
+                color: masterTab === t.key ? '#0070f3' : '#555',
+                borderBottom: masterTab === t.key ? '2px solid #0070f3' : '2px solid transparent',
+              }}>{t.label}</button>
+            ))}
+          </div>
+
+          {masterTab !== 'expenses' && (
+            <>
+              {/* 検索・CSV操作バー */}
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap' }}>
+                <input
+                  type="text"
+                  value={masterSearch}
+                  onChange={e => setMasterSearch(e.target.value)}
+                  placeholder="名前で検索..."
+                  style={{ flex: 1, minWidth: '160px', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px' }}
+                />
+                {masterTab === 'models' && (
+                  <select value={modelMakerFilter} onChange={e => setModelMakerFilter(e.target.value)}
+                    style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px' }}>
+                    <option value="">全メーカー</option>
+                    {makers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                )}
+                <div style={{ display: 'flex', gap: '6px', marginLeft: 'auto' }}>
+                  <button onClick={handleCsvDownload}
+                    style={{ padding: '8px 14px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', background: 'white', cursor: 'pointer', color: '#444', fontWeight: 500 }}>
+                    ↓ CSV
+                  </button>
+                  <button onClick={() => csvInputRef.current?.click()}
+                    style={{ padding: '8px 14px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', background: 'white', cursor: 'pointer', color: '#444', fontWeight: 500 }}>
+                    ↑ CSV取込
+                  </button>
+                  <input ref={csvInputRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleCsvUpload} />
+                </div>
+                {csvMessage && (
+                  <span style={{ fontSize: '13px', color: '#0070f3', fontWeight: 500 }}>{csvMessage}</span>
+                )}
+              </div>
+
+              {/* 追加フォーム */}
+              <div style={{ background: 'white', border: '1px solid #eee', borderRadius: '12px', padding: '16px', marginBottom: '16px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '12px' }}>新規追加</div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {masterTab === 'makers' && (
+                    <select value={selectedCountry} onChange={e => setSelectedCountry(e.target.value)}
+                      style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px' }}>
+                      <option value="">国を選択</option>
+                      {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  )}
+                  {masterTab === 'models' && (
+                    <select value={selectedMaker} onChange={e => setSelectedMaker(e.target.value)}
+                      style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px' }}>
+                      <option value="">メーカーを選択</option>
+                      {makers.map(m => <option key={m.id} value={m.id}>{m.master_countries?.name} - {m.name}</option>)}
+                    </select>
+                  )}
+                  <input type="text" value={newName} onChange={e => setNewName(e.target.value)}
+                    placeholder="名前を入力"
+                    onKeyDown={e => e.key === 'Enter' && handleMasterAdd()}
+                    style={{ flex: 1, padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', minWidth: '150px' }} />
+                  <button onClick={handleMasterAdd} disabled={masterLoading}
+                    style={{ padding: '8px 20px', background: '#0070f3', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', opacity: masterLoading ? 0.7 : 1 }}>
+                    追加
+                  </button>
+                </div>
+              </div>
+
+              {/* 一覧テーブル */}
+              <div style={{ background: 'white', border: '1px solid #eee', borderRadius: '12px', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#f8f9fa', borderBottom: '1px solid #eee' }}>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: '#888' }}>名前</th>
+                      {masterTab === 'makers' && <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: '#888' }}>国</th>}
+                      {masterTab === 'models' && <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: '#888' }}>メーカー</th>}
+                      <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', color: '#888' }}>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredMasterList.length === 0 ? (
+                      <tr>
+                        <td colSpan={masterTab === 'makers' || masterTab === 'models' ? 3 : 2}
+                          style={{ padding: '2rem', textAlign: 'center', color: '#aaa', fontSize: '13px' }}>
+                          {masterSearch || modelMakerFilter ? '条件に一致するデータがありません' : 'データがありません'}
+                        </td>
+                      </tr>
+                    ) : filteredMasterList.map((item, i) => (
+                      <tr key={item.id} style={{ borderBottom: i < filteredMasterList.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
+                        <td style={{ padding: '12px 16px', fontSize: '14px' }}>{item.name}</td>
+                        {masterTab === 'makers' && <td style={{ padding: '12px 16px', fontSize: '13px', color: '#888' }}>{item.master_countries?.name}</td>}
+                        {masterTab === 'models' && <td style={{ padding: '12px 16px', fontSize: '13px', color: '#888' }}>{item.master_makers?.name}</td>}
+                        <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                          <button onClick={() => handleMasterDelete(masterTableMap[masterTab], item.id)}
+                            style={{ fontSize: '12px', padding: '4px 12px', border: '1px solid #e00', borderRadius: '6px', color: '#e00', background: 'white', cursor: 'pointer' }}>
+                            削除
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          {masterTab === 'expenses' && (
+            <div>
+              <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '16px' }}>諸費用デフォルト設定</h3>
+              <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '20px' }}>
+                ここで設定した金額が車両見積作成時のデフォルト値になります。車両ごとに変更も可能です。
+              </p>
+              {expenseLoading ? (
+                <div style={{ color: '#9ca3af', fontSize: '14px' }}>読み込み中...</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {expenses.map(exp => (
+                    <div key={exp.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: 'white', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
+                      <span style={{ flex: 1, fontSize: '14px', color: '#111' }}>{exp.label}</span>
+                      {editingExpense === exp.id ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '13px', color: '#6b7280' }}>¥</span>
+                          <input
+                            type="number"
+                            value={editingExpenseAmount}
+                            onChange={e => setEditingExpenseAmount(e.target.value)}
+                            style={{ width: '120px', padding: '6px 10px', border: '1px solid #1a73e8', borderRadius: '6px', fontSize: '14px' }}
+                            autoFocus
+                          />
+                          <button
+                            onClick={async () => {
+                              await supabase.from('expense_master').update({ amount: parseInt(editingExpenseAmount) || 0 }).eq('id', exp.id)
+                              setEditingExpense(null)
+                              fetchExpenses()
+                            }}
+                            style={{ padding: '6px 14px', background: '#1a73e8', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                            保存
+                          </button>
+                          <button
+                            onClick={() => setEditingExpense(null)}
+                            style={{ padding: '6px 14px', background: 'white', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                            キャンセル
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{ fontSize: '14px', color: '#111', minWidth: '100px', textAlign: 'right' }}>
+                            {exp.amount ? `¥${exp.amount.toLocaleString()}` : '—'}
+                          </span>
+                          <button
+                            onClick={() => { setEditingExpense(exp.id); setEditingExpenseAmount(exp.amount?.toString() || '0') }}
+                            style={{ padding: '5px 12px', background: 'white', border: '1px solid #ddd', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#555' }}>
+                            編集
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      {/* ===== 表示設定タブ ===== */}
+      {tab === 'display' && (
+        <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '32px', maxWidth: '480px' }}>
+          <h3 style={{ margin: '0 0 24px', fontSize: '16px', fontWeight: 600, color: '#111' }}>文字サイズ</h3>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            {([
+              { value: 'small', label: '小', size: '14px' },
+              { value: 'medium', label: '中', size: '16px' },
+              { value: 'large', label: '大', size: '18px' },
+            ] as const).map(({ value, label, size }) => (
+              <button
+                key={value}
+                onClick={() => handleFontSize(value)}
+                style={{
+                  flex: 1,
+                  padding: '16px',
+                  borderRadius: '10px',
+                  border: `2px solid ${fontSize === value ? '#1a73e8' : '#e5e7eb'}`,
+                  background: fontSize === value ? '#eff6ff' : 'white',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <span style={{ fontSize: size, fontWeight: 600, color: fontSize === value ? '#1a73e8' : '#374151' }}>あ</span>
+                <span style={{ fontSize: '13px', color: fontSize === value ? '#1a73e8' : '#6b7280' }}>{label}</span>
+              </button>
+            ))}
+          </div>
+          <p style={{ marginTop: '16px', fontSize: '13px', color: '#9ca3af' }}>※ 設定はこのブラウザに保存されます</p>
         </div>
       )}
     </div>

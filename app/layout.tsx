@@ -31,6 +31,26 @@ const NAV_ITEMS2 = [
 { label: '設定', href: '/settings', icon: 'ti-tool' },
 ]
 
+const DROPDOWN_GROUPS = [
+  { label: '買取', items: [
+    { label: '買取問合', href: '/inquiries/new?type=purchase' },
+    { label: '買取商談', href: '/negotiations/new?category=purchase' },
+  ]},
+  { label: '販売', items: [
+    { label: '販売問合', href: '/inquiries/new?type=sales' },
+    { label: '販売商談', href: '/negotiations/new?category=sales' },
+  ]},
+  { label: 'その他', items: [
+    { label: '車検',     href: '/negotiations/new?category=inspection' },
+    { label: '修理',     href: '/negotiations/new?category=repair'     },
+    { label: 'ドレスUP', href: '/negotiations/new?category=dresup'     },
+  ]},
+  { label: '車両', items: [
+    { label: 'AA仕入', href: '/vehicles/new?type=aa'           },
+    { label: '預かり', href: '/vehicles/new?type=consignment'  },
+  ]},
+]
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
@@ -38,11 +58,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   const [collapsed, setCollapsed] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [searching, setSearching] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const timerRef = useRef<any>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   const search = async (q: string) => {
     const keywords = q.trim().replace(/\s+/g, ' ').split(' ').filter(Boolean)
@@ -102,6 +124,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     else { setQuery(''); setResults([]) }
   }, [searchOpen])
 
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
   const TYPE_COLOR: Record<string, string> = {
     '車両': '#1a73e8', '顧客': '#1e7e34', '商談': '#e65100', '問合': '#c5221f'
   }
@@ -136,7 +168,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   if (hideNav) {
     return (
-      <html lang="ja">
+      <html lang="ja" suppressHydrationWarning>
         <body style={{ margin: 0, fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
           {children}
         </body>
@@ -145,26 +177,88 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   }
 
   return (
-    <html lang="ja">
+    <html lang="ja" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: `
+  (function() {
+    var size = localStorage.getItem('fontSize') || 'medium';
+    document.documentElement.setAttribute('data-fontsize', size);
+    var zoom = size === 'small' ? '0.875' : size === 'large' ? '1.125' : '1';
+    document.documentElement.style.zoom = zoom;
+  })();
+` }} />
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
       </head>
       <body style={{ margin: 0, fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', background: '#f7f8fa', display: 'flex', minHeight: '100vh' }}>
 
-        {/* サイドバー */}
+        {/* グローバルヘッダー */}
+        <header style={{
+          position: 'fixed', top: 0, left: 0, right: 0, height: '56px',
+          background: 'white', borderBottom: '1px solid #eee',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '0 20px 0 0', zIndex: 1000,
+        }}>
+          {/* 左: ロゴ（サイドバー開閉に関わらず常に展開サイズで固定） */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '230px', flexShrink: 0 }}>
+            <Link href="/" style={{ lineHeight: 0 }}><SidebarLogo collapsed={false} /></Link>
+          </div>
+
+          {/* 右: 新規データ入力ドロップダウン */}
+          <div ref={dropdownRef} style={{ position: 'relative' }}>
+            <button
+              onClick={() => setDropdownOpen(o => !o)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '8px 16px', background: '#1a73e8', color: 'white',
+                border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <i className="ti ti-plus" style={{ fontSize: '15px' }} />
+              新規データ入力
+            </button>
+
+            {dropdownOpen && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 8px)', right: 0,
+                background: 'white', border: '1px solid #eee', borderRadius: '12px',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.12)', zIndex: 2000,
+                minWidth: '180px', overflow: 'hidden', padding: '8px 0',
+              }}>
+                {DROPDOWN_GROUPS.map((group, gi) => (
+                  <div key={group.label}>
+                    {gi > 0 && <div style={{ borderTop: '1px solid #f0f0f0', margin: '4px 0' }} />}
+                    <div style={{ padding: '4px 16px 2px', fontSize: '10px', color: '#aaa', fontWeight: 600, letterSpacing: '0.05em' }}>
+                      {group.label}
+                    </div>
+                    {group.items.map(item => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setDropdownOpen(false)}
+                        style={{ display: 'block', padding: '8px 16px 8px 24px', fontSize: '13px', color: '#333', textDecoration: 'none' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = '#f5f5f5' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'white' }}
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </header>
+
+        {/* サイドバー（ヘッダー下から開始） */}
         <aside style={{
-          width: `${sidebarW}px`, minHeight: '100vh',
+          width: `${sidebarW}px`,
           background: 'white', borderRight: '1px solid #eee',
           display: 'flex', flexDirection: 'column',
-          position: 'fixed', top: 0, left: 0, bottom: 0,
+          position: 'fixed', top: '56px', left: 0, bottom: 0,
           transition: 'width 0.22s ease', overflow: 'hidden', zIndex: 100,
           flexShrink: 0,
         }}>
-          {/* ロゴ */}
-          <div style={{ padding: '8px 0', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '56px' }}>
-            <Link href="/" style={{ lineHeight: 0 }}><SidebarLogo collapsed={collapsed} /></Link>
-          </div>
-
           {/* 検索ボタン */}
           <div style={{ padding: '8px 10px', borderBottom: '1px solid #eee' }}>
             <button onClick={() => setSearchOpen(true)} style={{
@@ -278,7 +372,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </div>
 
         {/* メインコンテンツ */}
-        <main style={{ marginLeft: `${sidebarW}px`, flex: 1, minHeight: '100vh', transition: 'margin-left 0.22s ease' }}>
+        <main style={{ marginLeft: `${sidebarW}px`, flex: 1, minHeight: '100vh', transition: 'margin-left 0.22s ease', paddingTop: '56px' }}>
           {children}
         </main>
       </body>

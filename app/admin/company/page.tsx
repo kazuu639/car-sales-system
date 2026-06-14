@@ -2,9 +2,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 export default function CompanySettingPage() {
   const [loading, setLoading] = useState(false)
+  const [loadingOverlay, setLoadingOverlay] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('処理中...')
   const [saved, setSaved] = useState(false)
   const [companyId, setCompanyId] = useState<string | null>(null)
 
@@ -47,6 +50,8 @@ export default function CompanySettingPage() {
   }, [])
 
   const handleSubmit = async () => {
+    setLoadingMessage('保存中...')
+    setLoadingOverlay(true)
     setLoading(true)
     if (companyId) {
       await supabase.from('companies').update({ ...form, updated_at: new Date().toISOString() }).eq('id', companyId)
@@ -54,6 +59,7 @@ export default function CompanySettingPage() {
       const { data } = await supabase.from('companies').insert([form]).select().single()
       if (data) setCompanyId(data.id)
     }
+    setLoadingOverlay(false)
     setLoading(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
@@ -70,6 +76,7 @@ export default function CompanySettingPage() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
+      {loadingOverlay && <LoadingOverlay message={loadingMessage} />}
       <div style={{ marginBottom: '1.5rem' }}>
         <Link href="/admin" style={{ fontSize: '13px', color: '#888', textDecoration: 'none' }}>← 管理画面に戻る</Link>
         <h1 style={{ fontSize: '22px', fontWeight: 700, margin: '8px 0 0' }}>会社情報設定</h1>

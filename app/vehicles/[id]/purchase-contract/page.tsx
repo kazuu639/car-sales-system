@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 export default function PurchaseContractPage() {
   const { id } = useParams() // vehicle_id
@@ -11,6 +12,8 @@ export default function PurchaseContractPage() {
   const [contract, setContract] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [loadingOverlay, setLoadingOverlay] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('処理中...')
   const [preview, setPreview] = useState(false)
   const [form, setForm] = useState({
     // 売主情報
@@ -104,6 +107,8 @@ export default function PurchaseContractPage() {
   }, [id])
 
   const handleSave = async (status: 'draft' | 'confirmed') => {
+    setLoadingMessage('保存中...')
+    setLoadingOverlay(true)
     setSaving(true)
     const payload = {
       vehicle_id: id as string,
@@ -161,6 +166,7 @@ export default function PurchaseContractPage() {
     } else {
       alert('下書きとして保存しました')
     }
+    setLoadingOverlay(false)
     setSaving(false)
   }
 
@@ -172,8 +178,8 @@ export default function PurchaseContractPage() {
   // プレビュー表示
   if (preview) {
     return (
-      <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '1.5rem' }}>
+      <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto', boxSizing: 'border-box' }}>
+        <div className="no-print" style={{ display: 'flex', gap: '8px', marginBottom: '1.5rem' }}>
           <button onClick={() => setPreview(false)} style={{ padding: '8px 16px', background: '#f1f3f4', color: '#555', border: 'none', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}>
             ← 編集に戻る
           </button>
@@ -189,7 +195,7 @@ export default function PurchaseContractPage() {
         </div>
 
         {/* 契約書プレビュー */}
-        <div id="print-area" style={{ background: 'white', padding: '40px', border: '1px solid #ddd', borderRadius: '8px', fontFamily: 'serif' }}>
+        <div id="print-area" style={{ background: 'white', padding: '32px', border: '1px solid #ddd', borderRadius: '8px', fontFamily: 'serif', boxSizing: 'border-box', width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
           <div style={{ textAlign: 'right', fontSize: '12px', marginBottom: '8px' }}>（弊社控え）</div>
           <h1 style={{ textAlign: 'center', fontSize: '24px', fontWeight: 700, marginBottom: '8px' }}>売　買　契　約　書</h1>
           <div style={{ textAlign: 'right', fontSize: '13px', marginBottom: '24px' }}>
@@ -268,10 +274,27 @@ export default function PurchaseContractPage() {
         </div>
 
         <style>{`
+          @page { size: A4 portrait; margin: 10mm; }
           @media print {
+            * { box-sizing: border-box !important; }
+            html, body { width: 210mm; margin: 0; padding: 0; }
             body * { visibility: hidden; }
             #print-area, #print-area * { visibility: visible; }
-            #print-area { position: absolute; left: 0; top: 0; width: 100%; }
+            #print-area {
+              position: absolute;
+              left: 0;
+              top: 0;
+              width: 190mm;
+              max-width: 190mm;
+              padding: 0 !important;
+              font-size: 11px;
+              overflow: hidden;
+            }
+            #print-area div, #print-area table {
+              max-width: 100%;
+              overflow: hidden;
+            }
+            .no-print { display: none !important; }
           }
         `}</style>
       </div>
@@ -281,6 +304,7 @@ export default function PurchaseContractPage() {
   return (
     <div style={{ padding: '2rem', maxWidth: '900px', margin: '0 auto' }}>
       {/* ヘッダー */}
+      {loadingOverlay && <LoadingOverlay message={loadingMessage} />}
       <div style={{ marginBottom: '1.5rem' }}>
         <Link href={`/vehicles/${id}`} style={{ fontSize: '13px', color: '#888', textDecoration: 'none' }}>← 車両詳細に戻る</Link>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>

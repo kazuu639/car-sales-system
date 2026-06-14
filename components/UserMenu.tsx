@@ -11,9 +11,11 @@ export default function UserMenu() {
 
   useEffect(() => {
     const fetchProfile = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      console.log('[UserMenu] auth user:', user, 'authError:', authError)
       if (!user) return
-      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+      const { data, error: profileError } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+      console.log('[UserMenu] profile:', data, 'profileError:', profileError)
       setProfile(data)
     }
     fetchProfile()

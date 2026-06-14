@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 export default function QuotePage() {
   const { id } = useParams()
@@ -15,6 +16,8 @@ export default function QuotePage() {
   const [vehicle, setVehicle] = useState<any>(null)
   const [customer, setCustomer] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingOverlay, setLoadingOverlay] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('処理中...')
   const [autoTaxOptions, setAutoTaxOptions] = useState<any[]>([])
   const [weightTaxOptions, setWeightTaxOptions] = useState<any[]>([])
   const [liabilityOptions, setLiabilityOptions] = useState<any[]>([])
@@ -118,6 +121,8 @@ export default function QuotePage() {
   }
 
   const handleSubmit = async () => {
+    setLoadingMessage('登録中...')
+    setLoadingOverlay(true)
     setLoading(true)
     const payload = {
       quote_number: generateQuoteNumber(),
@@ -156,9 +161,10 @@ export default function QuotePage() {
       notes: form.notes,
     }
     const { data: quote, error } = await supabase.from('quotes').insert([payload]).select().single()
-    if (error) { alert('エラー: ' + error.message); setLoading(false); return }
+    if (error) { alert('エラー: ' + error.message); setLoadingOverlay(false); setLoading(false); return }
     if (nvId) await supabase.from('negotiation_vehicles').update({ status: '見積済' }).eq('id', nvId)
     await supabase.from('negotiations').update({ status: '見積済' }).eq('id', id as string)
+    setLoadingOverlay(false)
     router.push(`/negotiations/${id}/quote/preview?quote_id=${quote.id}`)
   }
 
@@ -200,6 +206,7 @@ export default function QuotePage() {
 
   return (
     <div style={{ padding: '1.5rem', maxWidth: '1100px', margin: '0 auto' }}>
+      {loadingOverlay && <LoadingOverlay message={loadingMessage} />}
       <div style={{ marginBottom: '1rem' }}>
         <Link href={`/negotiations/${id}`} style={{ fontSize: '13px', color: '#888', textDecoration: 'none' }}>← 商談に戻る</Link>
         <h1 style={{ fontSize: '20px', fontWeight: 700, margin: '6px 0 0' }}>

@@ -47,7 +47,7 @@ export default function DashboardPage() {
   useEffect(() => {
     Promise.all([
       supabase.from('vehicles').select('*, master_makers(name), master_models(name)').order('created_at', { ascending: false }),
-      supabase.from('negotiations').select('*, customers(氏名), vehicles(master_makers(name), master_models(name))').order('created_at', { ascending: false }).limit(5),
+      supabase.from('negotiations').select('*, customers!customer_id(氏名), vehicles(master_makers(name), master_models(name))').order('created_at', { ascending: false }).limit(5),
       supabase.from('deliveries').select('*, contracts(*, negotiations(*, customers(氏名), vehicles(master_makers(name), master_models(name))))').order('created_at', { ascending: false }).limit(5),
       supabase.from('inquiries').select('*').eq('status', 'new').order('created_at', { ascending: false }).limit(5),
     ]).then(([v, n, d, i]) => {
@@ -188,10 +188,10 @@ export default function DashboardPage() {
               borderBottom: i < negotiations.length - 1 ? '1px solid #f5f5f5' : 'none', textDecoration: 'none',
             }}>
               <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 600, color: '#555', flexShrink: 0 }}>
-                {(n.customers?.氏名 ?? '?')[0]}
+                {(n.customers?.氏名 ?? '－')[0]}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '12px', fontWeight: 500, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.customers?.氏名 ?? '未設定'}</div>
+                <div style={{ fontSize: '12px', fontWeight: 500, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.customers?.氏名 ?? '－'}</div>
                 <div style={{ fontSize: '10px', color: '#aaa' }}>{n.vehicles?.master_makers?.name} {n.vehicles?.master_models?.name}</div>
               </div>
               <span style={{ fontSize: '10px', padding: '2px 7px', borderRadius: '20px', fontWeight: 500, whiteSpace: 'nowrap', background: STATUS_COLOR[n.status]?.bg ?? '#f1f3f4', color: STATUS_COLOR[n.status]?.color ?? '#555' }}>

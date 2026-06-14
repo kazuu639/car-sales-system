@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 type CalendarEvent = {
   id: string
@@ -53,6 +54,8 @@ export default function CalendarPage() {
   const [tab, setTab] = useState<'personal' | 'all' | 'shared'>('personal')
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [showModal, setShowModal] = useState(false)
+  const [loadingOverlay, setLoadingOverlay] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('処理中...')
   const [editTarget, setEditTarget] = useState<CalendarEvent | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [selectedDate, setSelectedDate] = useState<string | null>(todayStr)
@@ -109,12 +112,16 @@ export default function CalendarPage() {
     setShowModal(true)
   }
   const handleSave = async () => {
+    setLoadingMessage('保存中...')
+    setLoadingOverlay(true)
     if (!form.title) return alert('タイトルを入力してください')
     if (!form.event_date) return alert('日付を入力してください')
     const payload = { title: form.title, event_date: form.event_date, start_time: form.start_time || null, end_time: form.end_time || null, event_type: form.event_type, assigned_to: form.assigned_to || null, customer_name: form.customer_name || null, memo: form.memo || null }
     if (editTarget) await supabase.from('calendar_events').update(payload).eq('id', editTarget.id)
     else await supabase.from('calendar_events').insert(payload)
-    setShowModal(false); fetchEvents()
+    setShowModal(false)
+    setLoadingOverlay(false)
+    fetchEvents()
   }
   const handleDelete = async (id: string) => {
     if (!confirm('削除しますか？')) return
@@ -140,6 +147,7 @@ export default function CalendarPage() {
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
       {/* ヘッダー */}
+      {loadingOverlay && <LoadingOverlay message={loadingMessage} />}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <div>
           <h1 style={{ fontSize: '22px', fontWeight: 700, margin: 0 }}>カレンダー</h1>

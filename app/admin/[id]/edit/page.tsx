@@ -3,12 +3,15 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 export default function EditStaffPage() {
   const router = useRouter()
   const params = useParams()
   const id = params.id as string
   const [loading, setLoading] = useState(false)
+  const [loadingOverlay, setLoadingOverlay] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('処理中...')
   const [profile, setProfile] = useState<any>(null)
 
   useEffect(() => {
@@ -17,12 +20,15 @@ export default function EditStaffPage() {
   }, [id])
 
   const handleSubmit = async () => {
+    setLoadingMessage('保存中...')
+    setLoadingOverlay(true)
     setLoading(true)
     await supabase.from('profiles').update({
       display_name: profile.display_name,
       role: profile.role,
       join_date: profile.join_date || null,
     }).eq('id', id)
+    setLoadingOverlay(false)
     setLoading(false)
     router.push('/admin')
   }
@@ -37,6 +43,7 @@ export default function EditStaffPage() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '500px', margin: '0 auto' }}>
+      {loadingOverlay && <LoadingOverlay message={loadingMessage} />}
       <a href="/admin" style={{ fontSize: '13px', color: '#0070f3', textDecoration: 'none' }}>← スタッフ管理に戻る</a>
       <h1 style={{ fontSize: '22px', margin: '1rem 0 1.5rem' }}>スタッフ編集</h1>
 

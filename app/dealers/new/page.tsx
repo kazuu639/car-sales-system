@@ -3,10 +3,13 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 export default function NewDealerPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [loadingOverlay, setLoadingOverlay] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('処理中...')
   const [form, setForm] = useState({
     業者名: '',
     業者名カナ: '',
@@ -23,12 +26,15 @@ export default function NewDealerPage() {
 
   const handleSubmit = async () => {
     if (!form.業者名) { alert('業者名は必須です'); return }
+    setLoadingMessage('登録中...')
+    setLoadingOverlay(true)
     setLoading(true)
     const { error } = await supabase.from('dealers').insert([{
       ...form,
       company_id: '00000000-0000-0000-0000-000000000001',
     }])
-    if (error) { alert('エラー: ' + error.message); setLoading(false); return }
+    if (error) { alert('エラー: ' + error.message); setLoadingOverlay(false); setLoading(false); return }
+    setLoadingOverlay(false)
     router.push('/dealers')
   }
 
@@ -40,6 +46,7 @@ export default function NewDealerPage() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '700px', margin: '0 auto' }}>
+      {loadingOverlay && <LoadingOverlay message={loadingMessage} />}
       <div style={{ marginBottom: '1.5rem' }}>
         <Link href="/dealers" style={{ fontSize: '13px', color: '#888', textDecoration: 'none' }}>← 業者一覧に戻る</Link>
         <h1 style={{ fontSize: '22px', fontWeight: 700, margin: '8px 0 0' }}>業者登録</h1>

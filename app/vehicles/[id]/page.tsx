@@ -4,6 +4,7 @@ import { useParams, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { useProfile } from '@/hooks/useProfile'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 const CAT_COLOR: Record<string, { bg: string; color: string }> = {
   '売上':     { bg: '#e6f4ea', color: '#1e7e34' },
@@ -28,17 +29,54 @@ const STATUS_COLOR: Record<string, { bg: string; color: string }> = {
   '納車済': { bg: '#f1f3f4', color: '#5f6368' },
 }
 
+const EQUIPMENT_SECTIONS = [
+  {
+    label: '安全装備',
+    items: ['パワステ', 'ABS', 'サポカー', '衝突被害軽減ブレーキ', 'アダプティブクルーズコントロール', 'レーンキープアシスト', 'パーキングアシスト', 'アクセル踏み間違い防止', '障害物センサー', '全周囲カメラ', 'バックカメラ', 'ドライブレコーダー', '横滑り防止装置', 'ヒルディセントコントロール', 'アイドリングストップ', '盗難防止装置'],
+  },
+  {
+    label: '快適装備',
+    items: ['エアコン・クーラー', 'Wエアコン', 'カーナビ', 'フルセグTV', '後席モニター', 'ETC', 'ETC2.0', 'ミュージックプレイヤー接続可', 'エアサスペンション', '1500W給電', 'ディスプレイオーディオ'],
+  },
+  {
+    label: 'インテリア',
+    items: ['キーレス', 'スマートキー', 'パワーウインドウ', 'ベンチシート', '3列シート', 'ウォークスルー', '電動シート', 'シートエアコン', 'シートヒーター', 'フルフラットシート', 'オットマン', '本革シート'],
+  },
+  {
+    label: 'エクステリア',
+    items: ['アルミホイール', 'ローダウン', 'リフトアップ', 'サンルーフ・ガラスルーフ', 'ルーフレール', 'フルエアロ', 'フロントフォグランプ', 'スライドドア', '全塗装済'],
+  },
+]
+
+const ASSESSMENT_DOC_ITEMS = [
+  { key: 'shakken', label: '車検証',           col: 'assessment_shakken' },
+  { key: 'touroku', label: '登録事項証明書',   col: 'assessment_touroku' },
+  { key: 'caution', label: 'コーションプレート', col: 'assessment_caution' },
+  { key: 'hyoka',   label: '査定表',           col: 'assessment_hyoka'   },
+] as const
+type AssessmentDocKey = typeof ASSESSMENT_DOC_ITEMS[number]['key']
+
+const TRANSFER_DOC_ITEMS = [
+  { key: 'shakken', label: '車検証',       col: 'transfer_shakken' },
+  { key: 'touroku', label: '登録事項証明書', col: 'transfer_touroku' },
+  { key: 'inin',    label: '委任状',        col: 'transfer_inin'    },
+  { key: 'joto',    label: '譲渡書',        col: 'transfer_joto'    },
+  { key: 'inkan',   label: '印鑑証明',      col: 'transfer_inkan'   },
+] as const
+type TransferDocKey = typeof TRANSFER_DOC_ITEMS[number]['key']
+
 export default function VehicleDetailPage() {
   const { id } = useParams()
-  const { isAdmin } = useProfile()
+  const { profile, isAdmin } = useProfile()
+  console.log('isAdmin:', isAdmin, 'profile.role:', profile?.role)
   const [v, setV] = useState<any>(null)
   const [transactions, setTransactions] = useState<TxRecord[]>([])
   const searchParams = useSearchParams()
   const initialTab = searchParams.get('tab') || '在庫'
-  const [tab, setTab] = useState<'仕入' | '在庫' | '契約' | '登録' | '財務'>(initialTab as '仕入' | '在庫' | '契約' | '登録' | '財務')
+  const [tab, setTab] = useState<'仕入' | '在庫' | '販売' | '契約' | '登録' | '財務'>(initialTab as '仕入' | '在庫' | '販売' | '契約' | '登録' | '財務')
   const [saving, setSaving] = useState(false)
   const [editingPurchase, setEditingPurchase] = useState(false)
-  const [editingStock, setEditingStock] = useState(false)
+  const [editingStockDate, setEditingStockDate] = useState(false)
   const [editingRegistration, setEditingRegistration] = useState(false)
   const [editingContract, setEditingContract] = useState(false)
   const [editForm, setEditForm] = useState<Record<string, any>>({})
@@ -47,6 +85,60 @@ export default function VehicleDetailPage() {
   const [photoChanged, setPhotoChanged] = useState(false)
   const [editingPhoto, setEditingPhoto] = useState(false)
   const [photoUploading, setPhotoUploading] = useState(false)
+  const [linkedNegotiationId, setLinkedNegotiationId] = useState<string | null>(null)
+  const [assessmentCarImages, setAssessmentCarImages] = useState<string[]>([])
+  const [assessmentDocs, setAssessmentDocs] = useState<Record<AssessmentDocKey, string | null>>({ shakken: null, touroku: null, caution: null, hyoka: null })
+  const [assessmentScore, setAssessmentScore] = useState('')
+  const [assessmentComment, setAssessmentComment] = useState('')
+  const [transferDocs, setTransferDocs] = useState<Record<TransferDocKey, string | null>>({ shakken: null, touroku: null, inin: null, joto: null, inkan: null })
+  const [transferDocUploading, setTransferDocUploading] = useState<Record<string, boolean>>({})
+  const [transferDocImages, setTransferDocImages] = useState<(string | null)[]>([null, null, null, null, null])
+  const [transferImgUploading, setTransferImgUploading] = useState(false)
+  const [transferComment, setTransferComment] = useState('')
+  const [loadingOverlay, setLoadingOverlay] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('処理中...')
+  const [vehicleSpec, setVehicleSpec] = useState({
+    reg_number: '',
+    first_reg_year_month: '',
+    reg_date: '',
+    car_name: '',
+    model_type: '',
+    engine_type: '',
+    displacement: '',
+    fuel_type: '',
+    body_shape: '',
+    seating_capacity: '',
+    vehicle_weight: '',
+    vehicle_gross_weight: '',
+    length: '',
+    width: '',
+    height: '',
+    front_front_axle: '',
+    front_rear_axle: '',
+    rear_front_axle: '',
+    rear_rear_axle: '',
+    inspection_expiry: '',
+    exterior_color: '',
+    handle_side: '右',
+    grade: '',
+    recycle_fee: '',
+    vehicle_use: '自家用',
+    stock_notes: '',
+  })
+  const [editingSpec, setEditingSpec] = useState(false)
+  const [specSaving, setSpecSaving] = useState(false)
+  const [specOpen, setSpecOpen] = useState(false)
+  const [sellingPrice, setSellingPrice] = useState('')
+  const [expenseItems, setExpenseItems] = useState<{label: string, amount: number}[]>([])
+  const [optionItems, setOptionItems] = useState<{label: string, amount: number}[]>([])
+  const [editingEstimate, setEditingEstimate] = useState(false)
+  const [estimateSaving, setEstimateSaving] = useState(false)
+  const [equipment, setEquipment] = useState<string[]>([])
+  const [tuningNotes, setTuningNotes] = useState('')
+  const [equipmentOpen, setEquipmentOpen] = useState(false)
+  const [editingEquipment, setEditingEquipment] = useState(false)
+  const [purchaseSubTab, setPurchaseSubTab] = useState<'査定' | '契約' | '譲渡書類' | '支払'>('査定')
+  const [salesEstimates, setSalesEstimates] = useState<any[]>([])
   const [showStatusModal, setShowStatusModal] = useState(false)
   const [showImageModal, setShowImageModal] = useState(false)
   const [imageModalUrl, setImageModalUrl] = useState('')
@@ -66,6 +158,7 @@ export default function VehicleDetailPage() {
   const [deliveryCustomerName, setDeliveryCustomerName] = useState<string | null>(null)
   const [deliveryLoading, setDeliveryLoading] = useState(false)
   const [actualDeliveryDate, setActualDeliveryDate] = useState('')
+  const [purchaseContract, setPurchaseContract] = useState<any>(null)
 
   // ---- データ取得 ----
   const fetchVehicle = async () => {
@@ -120,10 +213,104 @@ export default function VehicleDetailPage() {
     if (del?.actual_delivery_date) setActualDeliveryDate(del.actual_delivery_date)
   }
 
-  useEffect(() => { fetchVehicle(); fetchTransactions(); fetchDelivery() }, [id])
+  const fetchAssessmentFromNegotiation = async (vid: string) => {
+    const { data } = await supabase
+      .from('negotiations')
+      .select('id, assessment_car_images, assessment_doc_shakken, assessment_doc_touroku, assessment_doc_caution, assessment_doc_hyoka, assessment_score, assessment_comment')
+      .eq('vehicle_id', vid)
+      .eq('category', 'purchase')
+      .order('created_at', { ascending: false })
+    if (data && data.length > 0) {
+      const best = data.find((d: any) => d.assessment_car_images?.length > 0) || data[0]
+      setLinkedNegotiationId(best.id)
+      setAssessmentCarImages(best.assessment_car_images || [])
+      setAssessmentDocs({
+        shakken: best.assessment_doc_shakken || null,
+        touroku: best.assessment_doc_touroku || null,
+        caution: best.assessment_doc_caution || null,
+        hyoka:   best.assessment_doc_hyoka   || null,
+      })
+      setAssessmentScore(best.assessment_score || '')
+      setAssessmentComment(best.assessment_comment || '')
+    }
+  }
+
+  const fetchPurchaseContract = async () => {
+    const { data } = await supabase.from('purchase_contracts')
+      .select('contract_date, contract_amount, seller_name, payment_method')
+      .eq('vehicle_id', id as string).maybeSingle()
+    setPurchaseContract(data ?? null)
+  }
+
+  const fetchSalesEstimates = async (vid: string) => {
+    const { data } = await supabase
+      .from('sales_estimates')
+      .select('*')
+      .eq('vehicle_id', vid)
+      .order('created_at', { ascending: false })
+    setSalesEstimates(data || [])
+  }
+
+  useEffect(() => { fetchVehicle(); fetchTransactions(); fetchDelivery(); fetchPurchaseContract(); fetchAssessmentFromNegotiation(id as string); fetchSalesEstimates(id as string) }, [id])
 
   useEffect(() => {
-    if (v) { setPhotoUrls(v.image_urls ?? []); setPhotoChanged(false) }
+    if (v) {
+      setPhotoUrls(v.image_urls ?? [])
+      setPhotoChanged(false)
+      setAssessmentCarImages(v.assessment_car_images ?? [])
+      setAssessmentDocs({
+        shakken: v.assessment_shakken ?? null,
+        touroku: v.assessment_touroku ?? null,
+        caution: v.assessment_caution ?? null,
+        hyoka:   v.assessment_hyoka   ?? null,
+      })
+      setAssessmentScore(v.assessment_score ?? '')
+      setAssessmentComment(v.assessment_comment ?? '')
+      setTransferDocs({
+        shakken: v.transfer_shakken ?? null,
+        touroku: v.transfer_touroku ?? null,
+        inin:    v.transfer_inin    ?? null,
+        joto:    v.transfer_joto    ?? null,
+        inkan:   v.transfer_inkan   ?? null,
+      })
+      const fixed5: (string | null)[] = [null, null, null, null, null]
+      ;(v.transfer_doc_images ?? []).slice(0, 5).forEach((url: string | null, i: number) => { fixed5[i] = url })
+      setTransferDocImages(fixed5)
+      setTransferComment(v.transfer_comment ?? '')
+      setVehicleSpec({
+        reg_number: v.reg_number || '',
+        first_reg_year_month: v.first_reg_year_month || '',
+        reg_date: v.reg_date || '',
+        car_name: v.car_name || '',
+        model_type: v.model_type || '',
+        engine_type: v.engine_type || '',
+        displacement: v.displacement?.toString() || '',
+        fuel_type: v.fuel_type || '',
+        body_shape: v.body_shape || '',
+        seating_capacity: v.seating_capacity?.toString() || '',
+        vehicle_weight: v.vehicle_weight?.toString() || '',
+        vehicle_gross_weight: v.vehicle_gross_weight?.toString() || '',
+        length: v.length?.toString() || '',
+        width: v.width?.toString() || '',
+        height: v.height?.toString() || '',
+        front_front_axle: v.front_front_axle?.toString() || '',
+        front_rear_axle: v.front_rear_axle?.toString() || '',
+        rear_front_axle: v.rear_front_axle?.toString() || '',
+        rear_rear_axle: v.rear_rear_axle?.toString() || '',
+        inspection_expiry: v.inspection_expiry || '',
+        exterior_color: v.exterior_color || '',
+        handle_side: v.handle_side || '右',
+        grade: v.grade || '',
+        recycle_fee: v.recycle_fee?.toString() || '',
+        vehicle_use: v.vehicle_use || '自家用',
+        stock_notes: v.stock_notes || '',
+      })
+      setEquipment(v.equipment || [])
+      setTuningNotes(v.tuning_notes || '')
+      setSellingPrice(v.selling_price?.toString() || '')
+      setExpenseItems(v.expenses || [])
+      setOptionItems(v.options || [])
+    }
   }, [v?.id])
 
   useEffect(() => {
@@ -133,6 +320,75 @@ export default function VehicleDetailPage() {
   }, [])
 
   // ---- 車両操作 ----
+  const handleSaveSpec = async () => {
+    setSpecSaving(true)
+    await supabase.from('vehicles').update({
+      reg_number: vehicleSpec.reg_number || null,
+      first_reg_year_month: vehicleSpec.first_reg_year_month || null,
+      reg_date: vehicleSpec.reg_date || null,
+      car_name: vehicleSpec.car_name || null,
+      model_type: vehicleSpec.model_type || null,
+      engine_type: vehicleSpec.engine_type || null,
+      displacement: vehicleSpec.displacement ? parseInt(vehicleSpec.displacement) : null,
+      fuel_type: vehicleSpec.fuel_type || null,
+      body_shape: vehicleSpec.body_shape || null,
+      seating_capacity: vehicleSpec.seating_capacity ? parseInt(vehicleSpec.seating_capacity) : null,
+      vehicle_weight: vehicleSpec.vehicle_weight ? parseInt(vehicleSpec.vehicle_weight) : null,
+      vehicle_gross_weight: vehicleSpec.vehicle_gross_weight ? parseInt(vehicleSpec.vehicle_gross_weight) : null,
+      length: vehicleSpec.length ? parseInt(vehicleSpec.length) : null,
+      width: vehicleSpec.width ? parseInt(vehicleSpec.width) : null,
+      height: vehicleSpec.height ? parseInt(vehicleSpec.height) : null,
+      front_front_axle: vehicleSpec.front_front_axle ? parseInt(vehicleSpec.front_front_axle) : null,
+      front_rear_axle: vehicleSpec.front_rear_axle ? parseInt(vehicleSpec.front_rear_axle) : null,
+      rear_front_axle: vehicleSpec.rear_front_axle ? parseInt(vehicleSpec.rear_front_axle) : null,
+      rear_rear_axle: vehicleSpec.rear_rear_axle ? parseInt(vehicleSpec.rear_rear_axle) : null,
+      inspection_expiry: vehicleSpec.inspection_expiry || null,
+      exterior_color: vehicleSpec.exterior_color || null,
+      handle_side: vehicleSpec.handle_side || null,
+      grade: vehicleSpec.grade || null,
+      recycle_fee: vehicleSpec.recycle_fee ? parseInt(vehicleSpec.recycle_fee) : null,
+      vehicle_use: vehicleSpec.vehicle_use || null,
+      stock_notes: vehicleSpec.stock_notes || null,
+    }).eq('id', id as string)
+    setSpecSaving(false)
+    setEditingSpec(false)
+  }
+  const initExpensesFromMaster = async () => {
+    const { data } = await supabase
+      .from('expense_master')
+      .select('label, amount')
+      .order('sort_order')
+    if (data) {
+      setExpenseItems(data.map(d => ({ label: d.label, amount: d.amount || 0 })))
+    }
+  }
+
+  const handleSaveEstimate = async () => {
+    setEstimateSaving(true)
+    const bodyPrice = parseInt(sellingPrice) || 0
+    const expenseTotal = expenseItems.reduce((sum, e) => sum + (e.amount || 0), 0)
+    const optionTotal = optionItems.reduce((sum, o) => sum + (o.amount || 0), 0)
+    const totalPayment = bodyPrice + expenseTotal + optionTotal
+    await supabase.from('vehicles').update({
+      selling_price: bodyPrice || null,
+      body_price: bodyPrice || null,
+      misc_fee: expenseTotal || null,
+      total_price: totalPayment || null,
+      expenses: expenseItems,
+      options: optionItems,
+    }).eq('id', id as string)
+    setEstimateSaving(false)
+    setEditingEstimate(false)
+    fetchVehicle()
+  }
+
+  const handleSaveEquipment = async () => {
+    await supabase.from('vehicles').update({
+      equipment,
+      tuning_notes: tuningNotes || null,
+    }).eq('id', id as string)
+    setEditingEquipment(false)
+  }
   const updateVehicle = async (fields: Record<string, any>) => {
     setSaving(true)
     await supabase.from('vehicles').update(fields).eq('id', id as string)
@@ -145,6 +401,8 @@ export default function VehicleDetailPage() {
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files || files.length === 0) return
+    setLoadingMessage('写真をアップロード中...')
+    setLoadingOverlay(true)
     setPhotoUploading(true)
     const newUrls: string[] = []
     for (const file of Array.from(files)) {
@@ -159,7 +417,57 @@ export default function VehicleDetailPage() {
     setPhotoUrls(prev => [...prev, ...newUrls])
     setPhotoChanged(true)
     setPhotoUploading(false)
+    setLoadingOverlay(false)
     e.target.value = ''
+  }
+
+  const handleTransferDocSingleUpload = async (e: React.ChangeEvent<HTMLInputElement>, key: TransferDocKey, col: string) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setTransferDocUploading(prev => ({ ...prev, [key]: true }))
+    const ext = file.name.split('.').pop()
+    const path = `${id}/transfer/${key}/${Date.now()}.${ext}`
+    const { error } = await supabase.storage.from('vehicle-images').upload(path, file)
+    if (!error) {
+      const { data } = supabase.storage.from('vehicle-images').getPublicUrl(path)
+      setTransferDocs(prev => ({ ...prev, [key]: data.publicUrl }))
+      await supabase.from('vehicles').update({ [col]: data.publicUrl }).eq('id', id as string)
+    }
+    setTransferDocUploading(prev => ({ ...prev, [key]: false }))
+    e.target.value = ''
+  }
+
+  const deleteTransferDocSingle = async (key: TransferDocKey, col: string) => {
+    setTransferDocs(prev => ({ ...prev, [key]: null }))
+    await supabase.from('vehicles').update({ [col]: null }).eq('id', id as string)
+  }
+
+  const handleTransferDocImgUpload = async (e: React.ChangeEvent<HTMLInputElement>, slotIndex: number) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLoadingMessage('写真をアップロード中...')
+    setLoadingOverlay(true)
+    setTransferImgUploading(true)
+    const ext = file.name.split('.').pop()
+    const path = `${id}/transfer/other/${Date.now()}_${slotIndex}.${ext}`
+    const { error } = await supabase.storage.from('vehicle-images').upload(path, file)
+    if (!error) {
+      const { data } = supabase.storage.from('vehicle-images').getPublicUrl(path)
+      const updated = [...transferDocImages]
+      updated[slotIndex] = data.publicUrl
+      setTransferDocImages(updated)
+      await supabase.from('vehicles').update({ transfer_doc_images: updated }).eq('id', id as string)
+    }
+    setTransferImgUploading(false)
+    setLoadingOverlay(false)
+    e.target.value = ''
+  }
+
+  const deleteTransferDocImg = async (slotIndex: number) => {
+    const updated = [...transferDocImages]
+    updated[slotIndex] = null
+    setTransferDocImages(updated)
+    await supabase.from('vehicles').update({ transfer_doc_images: updated }).eq('id', id as string)
   }
 
   const handleDelete = async () => {
@@ -251,33 +559,27 @@ export default function VehicleDetailPage() {
     </div>
   )
 
-  const TABS = ['仕入', '在庫', '契約', '登録', '財務'] as const
+  const TABS = ['仕入', '在庫', '販売', '契約', '登録', '財務'] as const
 
   return (
     <div style={{ padding: '1.5rem', maxWidth: '1200px', margin: '0 auto' }}>
+      {loadingOverlay && <LoadingOverlay message={loadingMessage} />}
 
       {/* ===== 上部ヘッダー ===== */}
       <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '16px 20px', marginBottom: '16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-            <div style={{ width: '100px', height: '75px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0, border: '1px solid #eee', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px' }}>
+
+        {/* 1行目: 写真 + 管理番号/バッジ + ボタン群 */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+            <div style={{ width: '90px', height: '68px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0, border: '1px solid #eee', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px' }}>
               {v.image_urls?.length > 0
                 ? <img src={v.image_urls[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 : '🚗'}
             </div>
-            <div>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px' }}>
-                <span style={{ fontSize: '13px', color: '#888', fontWeight: 500 }}>{v.db_number}</span>
-                <span style={{ fontSize: '11px', padding: '2px 10px', borderRadius: '20px', fontWeight: 600, background: STATUS_COLOR[v.status]?.bg ?? '#f1f3f4', color: STATUS_COLOR[v.status]?.color ?? '#555' }}>{v.status}</span>
-                <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '20px', background: '#f1f3f4', color: '#555' }}>{v.purchase_type}</span>
-              </div>
-              <h1 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 4px' }}>{v.master_makers?.name} {v.master_models?.name}</h1>
-              <div style={{ display: 'flex', gap: '16px', fontSize: '13px', color: '#555' }}>
-                {v.year && <span>{v.year}年</span>}
-                {v.mileage && <span>{v.mileage.toLocaleString()}km</span>}
-                {v.chassis_number && <span>車台: {v.chassis_number}</span>}
-                {v.car_number && <span>ナンバー: {v.car_number}</span>}
-              </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '15px', color: '#555', fontWeight: 700 }}>{v.db_number}</span>
+              <span style={{ fontSize: '11px', padding: '2px 10px', borderRadius: '20px', fontWeight: 600, background: STATUS_COLOR[v.status]?.bg ?? '#f1f3f4', color: STATUS_COLOR[v.status]?.color ?? '#555' }}>{v.status}</span>
+              <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '20px', background: '#f1f3f4', color: '#555' }}>{v.purchase_type}</span>
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -287,7 +589,55 @@ export default function VehicleDetailPage() {
             <Link href={`/negotiations/new?vehicle=${v.id}`} style={{ padding: '7px 14px', background: '#0070f3', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>販売商談作成</Link>
           </div>
         </div>
-        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #f0f0f0' }}>
+
+        {/* 2行目: 4カラム情報グリッド */}
+        {(() => {
+          const hcell = (label: string, value: React.ReactNode) => (
+            <div style={{ display: 'flex', gap: '6px', fontSize: '12px', marginBottom: '5px', alignItems: 'baseline' }}>
+              <span style={{ color: '#aaa', flexShrink: 0, minWidth: '72px' }}>{label}</span>
+              <span style={{ color: value ? '#222' : '#ccc', fontWeight: value ? 500 : 400 }}>{value || '―'}</span>
+            </div>
+          )
+          const hsec = (title: string) => (
+            <div style={{ fontSize: '10px', fontWeight: 700, color: '#bbb', letterSpacing: '0.08em', marginBottom: '8px', textTransform: 'uppercase' }}>{title}</div>
+          )
+          return (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0 20px', padding: '14px 0', borderTop: '1px solid #f0f0f0', borderBottom: '1px solid #f0f0f0' }}>
+              {/* 車輌 */}
+              <div>
+                {hsec('車輌')}
+                {hcell('車種', [v.master_makers?.name, v.master_models?.name].filter(Boolean).join(' ') || null)}
+                {hcell('年式', v.year ? `${v.year}年` : null)}
+                {hcell('走行距離', v.mileage ? `${v.mileage.toLocaleString()} km` : null)}
+                {hcell('車台番号', v.chassis_number)}
+                {hcell('修復歴', <span style={{ color: v.repair_history ? '#e53e3e' : undefined }}>{v.repair_history ? 'あり' : 'なし'}</span>)}
+              </div>
+              {/* 各契約日 */}
+              <div>
+                {hsec('各契約日')}
+                {hcell('仕）契約日', v.purchase_contract_date)}
+                {hcell('入庫日', v.stock_date)}
+                {hcell('販）契約日', null)}
+                {hcell('売上日', null)}
+              </div>
+              {/* 財務情報 */}
+              <div>
+                {hsec('財務情報')}
+                {hcell('仕入金額', v.purchase_price ? `¥${v.purchase_price.toLocaleString()}` : null)}
+                {hcell('売上', null)}
+              </div>
+              {/* 担当 */}
+              <div>
+                {hsec('担当')}
+                {hcell('仕入担当', v.purchase_staff)}
+                {hcell('売上担当', null)}
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* 3行目: チェックバッジ */}
+        <div style={{ marginTop: '12px' }}>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
             <span style={{ fontSize: '11px', color: '#888', fontWeight: 600 }}>仕入</span>
             <CheckBadge label="入庫済" checked={v.entry_check} onToggle={() => toggleCheck('entry_check')} />
@@ -303,37 +653,298 @@ export default function VehicleDetailPage() {
         </div>
       </div>
 
+      {/* 車検証情報カード */}
+      <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', overflow: 'hidden', marginBottom: '16px' }}>
+        {/* ヘッダー */}
+        <div
+          style={{ padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', background: '#EFF6FF', borderBottom: (specOpen || editingSpec) ? '1px solid #BFDBFE' : 'none', borderRadius: '12px 12px 0 0' }}
+          onClick={() => { if (!editingSpec) setSpecOpen(o => !o) }}>
+          <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#1E3A5F', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            📋 車検証情報
+            <span style={{ fontSize: '11px', color: '#9ca3af', fontWeight: 400 }}>{specOpen ? '▲ 閉じる' : '▼ 開く'}</span>
+          </h3>
+          <div style={{ display: 'flex', gap: '8px' }} onClick={e => e.stopPropagation()}>
+            {specOpen && !editingSpec && (
+              <button onClick={() => setEditingSpec(true)}
+                style={{ padding: '6px 14px', background: 'white', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                編集
+              </button>
+            )}
+            {editingSpec && (
+              <>
+                <button onClick={() => { setEditingSpec(false) }}
+                  style={{ padding: '6px 14px', background: 'white', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                  キャンセル
+                </button>
+                <button onClick={handleSaveSpec} disabled={specSaving}
+                  style={{ padding: '6px 14px', background: '#1a73e8', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                  {specSaving ? '保存中...' : '保存'}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* 表示モード */}
+        {specOpen && !editingSpec && (
+          <div style={{ padding: '16px 20px' }}>
+            {/* 登録情報 */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '12px' }}>
+              {[
+                { label: '登録番号', value: vehicleSpec.reg_number },
+                { label: '初度登録', value: vehicleSpec.first_reg_year_month },
+                { label: '登録年月日', value: vehicleSpec.reg_date },
+                { label: '有効期限', value: vehicleSpec.inspection_expiry },
+              ].map(({ label, value }) => (
+                <div key={label}>
+                  <div style={{ fontSize: '11px', color: '#888', marginBottom: '2px' }}>{label}</div>
+                  <div style={{ fontSize: '13px', color: value ? '#111' : '#ccc' }}>{value || '—'}</div>
+                </div>
+              ))}
+            </div>
+            {/* 車両基本情報 */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '12px' }}>
+              {[
+                { label: '車名', value: vehicleSpec.car_name },
+                { label: 'グレード', value: vehicleSpec.grade },
+                { label: '型式', value: vehicleSpec.model_type },
+                { label: '原動機型式', value: vehicleSpec.engine_type },
+                { label: '排気量', value: vehicleSpec.displacement ? `${vehicleSpec.displacement}cc` : '' },
+                { label: '燃料', value: vehicleSpec.fuel_type },
+                { label: '車体形状', value: vehicleSpec.body_shape },
+                { label: '用途', value: vehicleSpec.vehicle_use },
+                { label: '外装色', value: vehicleSpec.exterior_color },
+                { label: 'ハンドル', value: vehicleSpec.handle_side ? `${vehicleSpec.handle_side}ハンドル` : '' },
+                { label: '乗車定員', value: vehicleSpec.seating_capacity ? `${vehicleSpec.seating_capacity}人` : '' },
+                { label: 'リサイクル料', value: vehicleSpec.recycle_fee ? `¥${Number(vehicleSpec.recycle_fee).toLocaleString()}` : '' },
+              ].map(({ label, value }) => (
+                <div key={label}>
+                  <div style={{ fontSize: '11px', color: '#888', marginBottom: '2px' }}>{label}</div>
+                  <div style={{ fontSize: '13px', color: value ? '#111' : '#ccc' }}>{value || '—'}</div>
+                </div>
+              ))}
+            </div>
+            {/* 寸法・重量 */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '12px' }}>
+              {[
+                { label: '長さ', value: vehicleSpec.length ? `${vehicleSpec.length}cm` : '' },
+                { label: '幅', value: vehicleSpec.width ? `${vehicleSpec.width}cm` : '' },
+                { label: '高さ', value: vehicleSpec.height ? `${vehicleSpec.height}cm` : '' },
+                { label: '車両重量', value: vehicleSpec.vehicle_weight ? `${vehicleSpec.vehicle_weight}kg` : '' },
+                { label: '車両総重量', value: vehicleSpec.vehicle_gross_weight ? `${vehicleSpec.vehicle_gross_weight}kg` : '' },
+                { label: '前前軸重', value: vehicleSpec.front_front_axle ? `${vehicleSpec.front_front_axle}kg` : '' },
+                { label: '前後軸重', value: vehicleSpec.front_rear_axle ? `${vehicleSpec.front_rear_axle}kg` : '' },
+                { label: '後前軸重', value: vehicleSpec.rear_front_axle ? `${vehicleSpec.rear_front_axle}kg` : '' },
+              ].map(({ label, value }) => (
+                <div key={label}>
+                  <div style={{ fontSize: '11px', color: '#888', marginBottom: '2px' }}>{label}</div>
+                  <div style={{ fontSize: '13px', color: value ? '#111' : '#ccc' }}>{value || '—'}</div>
+                </div>
+              ))}
+            </div>
+            {vehicleSpec.stock_notes && (
+              <div>
+                <div style={{ fontSize: '11px', color: '#888', marginBottom: '2px' }}>備考</div>
+                <div style={{ fontSize: '13px', color: '#111' }}>{vehicleSpec.stock_notes}</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 編集モード */}
+        {(specOpen || editingSpec) && editingSpec && (
+          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* 登録情報 */}
+            <div>
+              <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: '#666', fontWeight: 600 }}>登録情報</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                {[
+                  { key: 'reg_number', label: '登録番号', placeholder: '例：相模330あ1358' },
+                  { key: 'first_reg_year_month', label: '初度登録', placeholder: '例：H7.6' },
+                  { key: 'reg_date', label: '登録年月日', placeholder: '例：H30.3.17' },
+                  { key: 'inspection_expiry', label: '有効期限', placeholder: '例：R8.11.10' },
+                ].map(({ key, label, placeholder }) => (
+                  <div key={key}>
+                    <label style={{ display: 'block', fontSize: '12px', color: '#666', marginBottom: '4px' }}>{label}</label>
+                    <input value={vehicleSpec[key as keyof typeof vehicleSpec] as string}
+                      onChange={e => setVehicleSpec(s => ({ ...s, [key]: e.target.value }))}
+                      placeholder={placeholder}
+                      style={{ width: '100%', padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 基本情報 */}
+            <div>
+              <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: '#666', fontWeight: 600 }}>基本情報</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                {[
+                  { key: 'car_name', label: '車名', placeholder: '例：スプリンタートレノ' },
+                  { key: 'grade', label: 'グレード', placeholder: '例：1.6 BZ-G' },
+                  { key: 'model_type', label: '型式', placeholder: '例：E-AE111' },
+                  { key: 'engine_type', label: '原動機型式', placeholder: '例：4A-GE' },
+                  { key: 'displacement', label: '排気量(cc)', placeholder: '例：1600' },
+                  { key: 'exterior_color', label: '外装色', placeholder: '例：ホワイト' },
+                  { key: 'seating_capacity', label: '乗車定員', placeholder: '例：5' },
+                  { key: 'recycle_fee', label: 'リサイクル料金', placeholder: '例：12000' },
+                ].map(({ key, label, placeholder }) => (
+                  <div key={key}>
+                    <label style={{ display: 'block', fontSize: '12px', color: '#666', marginBottom: '4px' }}>{label}</label>
+                    <input value={vehicleSpec[key as keyof typeof vehicleSpec] as string}
+                      onChange={e => setVehicleSpec(s => ({ ...s, [key]: e.target.value }))}
+                      placeholder={placeholder}
+                      style={{ width: '100%', padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' }} />
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginTop: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#666', marginBottom: '4px' }}>燃料</label>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    {['G', 'D', 'HV', 'EV'].map(fv => (
+                      <button key={fv} onClick={() => setVehicleSpec(s => ({ ...s, fuel_type: fv }))}
+                        style={{ flex: 1, padding: '7px 4px', borderRadius: '6px', border: `1px solid ${vehicleSpec.fuel_type === fv ? '#1a73e8' : '#e5e7eb'}`, background: vehicleSpec.fuel_type === fv ? '#eff6ff' : 'white', color: vehicleSpec.fuel_type === fv ? '#1a73e8' : '#555', fontSize: '12px', cursor: 'pointer' }}>{fv}</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#666', marginBottom: '4px' }}>ハンドル</label>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    {['右', '左'].map(hv => (
+                      <button key={hv} onClick={() => setVehicleSpec(s => ({ ...s, handle_side: hv }))}
+                        style={{ flex: 1, padding: '7px 4px', borderRadius: '6px', border: `1px solid ${vehicleSpec.handle_side === hv ? '#1a73e8' : '#e5e7eb'}`, background: vehicleSpec.handle_side === hv ? '#eff6ff' : 'white', color: vehicleSpec.handle_side === hv ? '#1a73e8' : '#555', fontSize: '12px', cursor: 'pointer' }}>{hv}ハンドル</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#666', marginBottom: '4px' }}>用途</label>
+                  <select value={vehicleSpec.vehicle_use} onChange={e => setVehicleSpec(s => ({ ...s, vehicle_use: e.target.value }))}
+                    style={{ width: '100%', padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px' }}>
+                    {['自家用', '事業用', 'レンタカー', 'その他'].map(uv => <option key={uv}>{uv}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#666', marginBottom: '4px' }}>車体形状</label>
+                  <input value={vehicleSpec.body_shape} onChange={e => setVehicleSpec(s => ({ ...s, body_shape: e.target.value }))}
+                    placeholder="例：クーペ"
+                    style={{ width: '100%', padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' }} />
+                </div>
+              </div>
+            </div>
+
+            {/* 寸法・重量 */}
+            <div>
+              <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: '#666', fontWeight: 600 }}>寸法・重量</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                {[
+                  { key: 'length', label: '長さ(cm)', placeholder: '例：435' },
+                  { key: 'width', label: '幅(cm)', placeholder: '例：169' },
+                  { key: 'height', label: '高さ(cm)', placeholder: '例：130' },
+                  { key: 'vehicle_weight', label: '車両重量(kg)', placeholder: '例：1050' },
+                  { key: 'vehicle_gross_weight', label: '車両総重量(kg)', placeholder: '例：1375' },
+                  { key: 'front_front_axle', label: '前前軸重(kg)', placeholder: '例：590' },
+                  { key: 'front_rear_axle', label: '前後軸重(kg)', placeholder: '例：590' },
+                  { key: 'rear_front_axle', label: '後前軸重(kg)', placeholder: '例：460' },
+                ].map(({ key, label, placeholder }) => (
+                  <div key={key}>
+                    <label style={{ display: 'block', fontSize: '12px', color: '#666', marginBottom: '4px' }}>{label}</label>
+                    <input value={vehicleSpec[key as keyof typeof vehicleSpec] as string}
+                      onChange={e => setVehicleSpec(s => ({ ...s, [key]: e.target.value }))}
+                      placeholder={placeholder}
+                      style={{ width: '100%', padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 備考 */}
+            <div>
+              <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: '#666', fontWeight: 600 }}>備考・オプション</h4>
+              <textarea value={vehicleSpec.stock_notes} onChange={e => setVehicleSpec(s => ({ ...s, stock_notes: e.target.value }))}
+                placeholder="オプション装備・特記事項など"
+                rows={3}
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', resize: 'vertical', boxSizing: 'border-box' }} />
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* メインタブ */}
       <div style={{ display: 'flex', gap: '2px', marginBottom: '16px', background: '#f1f3f4', borderRadius: '10px', padding: '4px', width: 'fit-content' }}>
         {TABS.map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
-            padding: '7px 20px', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 500, cursor: 'pointer',
-            background: tab === t ? 'white' : 'transparent',
-            color: tab === t ? '#111' : '#888',
-            boxShadow: tab === t ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+            padding: '7px 20px', border: 'none', fontSize: '13px', cursor: 'pointer',
+            background: tab === t ? '#E6F1FB' : 'transparent',
+            color: tab === t ? '#0C447C' : '#888',
+            borderBottom: tab === t ? '2px solid #185FA5' : '2px solid transparent',
+            borderRadius: tab === t ? '8px 8px 0 0' : '0',
+            fontWeight: tab === t ? 600 : 400,
           }}>{t}</button>
         ))}
       </div>
 
       {/* ===== 仕入タブ ===== */}
       {tab === '仕入' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '14px', fontWeight: 600, margin: 0 }}>仕入情報</h3>
-              {!editingPurchase && (
-                <button onClick={() => { setEditingPurchase(true); setEditForm({ purchase_type: v.purchase_type ?? '', purchase_price: v.purchase_price ?? '', stock_date: v.stock_date ?? '', purchase_staff: v.purchase_staff ?? '' }) }}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '16px' }}>
+          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', overflow: 'hidden' }}>
+            <div style={{ background: '#F0FDF4', borderBottom: '1px solid #BBF7D0', padding: '12px 20px', borderRadius: '12px 12px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#14532D', margin: 0 }}>仕入情報</h3>
+              {isAdmin && !editingPurchase && (
+                <button onClick={() => { setEditingPurchase(true); setEditForm({ purchase_type: v.purchase_type ?? '', purchase_price: v.purchase_price ?? '', purchase_staff: v.purchase_staff ?? '' }) }}
                   style={{ padding: '5px 14px', background: '#f1f3f4', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#555', fontWeight: 500 }}>
                   仕入情報を編集
                 </button>
               )}
             </div>
+            <div style={{ padding: '20px' }}>
+
             {!editingPurchase ? (
               <>
                 {cell('仕入区分', v.purchase_type)}
                 {cell('仕入契約日', v.purchase_contract_date)}
-                {cell('入庫日', v.stock_date)}
-                {cell('仕入担当', v.purchase_staff)}
+
+                {/* 入庫日: 管理者・非管理者ともに専用の編集ボタンでインライン編集 */}
+                <div style={{ borderBottom: '1px solid #f5f5f5', padding: '7px 0', fontSize: '13px' }}>
+                  {editingStockDate ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <span style={{ color: '#888', fontSize: '12px' }}>入庫日</span>
+                      <input
+                        type="date"
+                        value={editForm.stock_date ?? ''}
+                        autoFocus
+                        onChange={e => setEditForm((f: any) => ({ ...f, stock_date: e.target.value }))}
+                        style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', width: '100%', boxSizing: 'border-box' as const }}
+                      />
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button onClick={async () => {
+                          await updateVehicle({ stock_date: editForm.stock_date || null })
+                          setEditingStockDate(false)
+                        }} disabled={saving}
+                          style={{ flex: 1, padding: '6px', background: '#0070f3', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+                          {saving ? '保存中...' : '保存'}
+                        </button>
+                        <button onClick={() => setEditingStockDate(false)}
+                          style={{ flex: 1, padding: '6px', background: '#f1f3f4', color: '#555', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                          キャンセル
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', alignItems: 'center' }}>
+                      <span style={{ color: '#888' }}>入庫日</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>{v.stock_date ?? '—'}</span>
+                        <button onClick={() => { setEditingStockDate(true); setEditForm((f: any) => ({ ...f, stock_date: v.stock_date ?? '' })) }}
+                          style={{ padding: '2px 8px', background: '#f1f3f4', border: 'none', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', color: '#555' }}>
+                          編集
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {cell('仕入担当', v.purchase_staff || null)}
                 {cell('仕入金額', v.purchase_price ? '¥' + v.purchase_price.toLocaleString() : null)}
               </>
             ) : (
@@ -351,17 +962,19 @@ export default function VehicleDetailPage() {
                     style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' }} />
                 </div>
                 <div>
-                  <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>入庫日</label>
-                  <input type="date" value={editForm.stock_date} onChange={e => setEditForm((f: any) => ({ ...f, stock_date: e.target.value }))}
-                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' }} />
-                </div>
-                <div>
                   <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>仕入担当</label>
                   <input type="text" value={editForm.purchase_staff} onChange={e => setEditForm((f: any) => ({ ...f, purchase_staff: e.target.value }))}
                     style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' }} />
                 </div>
                 <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                  <button onClick={async () => { await updateVehicle({ purchase_type: editForm.purchase_type || null, purchase_price: editForm.purchase_price ? parseInt(editForm.purchase_price) : null, stock_date: editForm.stock_date || null, purchase_staff: editForm.purchase_staff || null }); setEditingPurchase(false) }}
+                  <button onClick={async () => {
+                    await updateVehicle({
+                      purchase_type:  editForm.purchase_type  || null,
+                      purchase_price: editForm.purchase_price ? parseInt(editForm.purchase_price) : null,
+                      purchase_staff: editForm.purchase_staff || null,
+                    })
+                    setEditingPurchase(false)
+                  }}
                     disabled={saving}
                     style={{ flex: 1, padding: '9px', background: '#0070f3', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
                     {saving ? '保存中...' : '保存'}
@@ -373,24 +986,210 @@ export default function VehicleDetailPage() {
                 </div>
               </div>
             )}
+            </div>{/* padding wrapper */}
           </div>
-          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 600, margin: '0 0 16px' }}>仕入写真・書類</h3>
-            {v.image_urls?.length > 0 ? (
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {v.image_urls.map((url: string, i: number) => (
-                  <img key={i} src={url} alt="" style={{ width: '80px', height: '60px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #eee', cursor: 'pointer' }}
-                    onClick={() => { setImageModalUrl(url); setShowImageModal(true) }} />
-                ))}
+          {/* 右エリア: サブタブ */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {/* サブタブナビ */}
+            <div style={{ display: 'flex', gap: '2px', background: '#f1f3f4', borderRadius: '10px', padding: '4px', width: 'fit-content' }}>
+              {(['査定', '契約', '譲渡書類', '支払'] as const).map(t => (
+                <button key={t} onClick={() => setPurchaseSubTab(t)} style={{
+                  padding: '6px 14px', border: 'none', borderRadius: '7px', fontSize: '12px', fontWeight: 500, cursor: 'pointer',
+                  background: purchaseSubTab === t ? 'white' : 'transparent',
+                  color: purchaseSubTab === t ? '#111' : '#888',
+                  boxShadow: purchaseSubTab === t ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+                }}>{t}</button>
+              ))}
+            </div>
+
+            {/* ===== 査定サブタブ ===== */}
+            {purchaseSubTab === '査定' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+                {linkedNegotiationId && (
+                  <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '13px', color: '#1d4ed8' }}>📋 査定商談のデータを参照しています</span>
+                    <a href={`/negotiations/${linkedNegotiationId}`} style={{ fontSize: '13px', color: '#1d4ed8', textDecoration: 'underline' }}>商談ページで編集 →</a>
+                  </div>
+                )}
+
+                <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+                  <div style={{ background: '#FFF7ED', borderBottom: '1px solid #FED7AA', padding: '12px 20px', borderRadius: '12px 12px 0 0' }}>
+                    <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#7C2D12' }}>査定写真</h3>
+                  </div>
+                  <div style={{ padding: '20px' }}>
+                  {assessmentCarImages.length === 0 ? (
+                    <div style={{ background: '#f9fafb', borderRadius: '8px', padding: '32px', textAlign: 'center', color: '#9ca3af', fontSize: '14px' }}>写真なし</div>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '8px' }}>
+                      {assessmentCarImages.map((url, i) => (
+                        <div key={i} style={{ aspectRatio: '4/3', borderRadius: '8px', overflow: 'hidden', background: '#f3f4f6' }}>
+                          <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  </div>{/* padding wrapper */}
+                </div>
+
+                <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+                  <div style={{ background: '#FFF7ED', borderBottom: '1px solid #FED7AA', padding: '12px 20px', borderRadius: '12px 12px 0 0' }}>
+                    <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#7C2D12' }}>書類写真</h3>
+                  </div>
+                  <div style={{ padding: '20px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {[
+                      { key: 'shakken', label: '車検証' },
+                      { key: 'touroku', label: '登録事項証明書' },
+                      { key: 'caution', label: 'コーションプレート' },
+                      { key: 'hyoka',   label: '査定表' },
+                    ].map(({ key, label }) => (
+                      <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <span style={{ width: '140px', fontSize: '14px', color: '#374151' }}>{label}</span>
+                        {assessmentDocs[key as keyof typeof assessmentDocs] ? (
+                          <a href={assessmentDocs[key as keyof typeof assessmentDocs]!} target="_blank" rel="noopener noreferrer">
+                            <img src={assessmentDocs[key as keyof typeof assessmentDocs]!} alt={label} style={{ width: '60px', height: '45px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e5e7eb' }} />
+                          </a>
+                        ) : (
+                          <span style={{ fontSize: '13px', color: '#9ca3af' }}>—</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  </div>{/* padding wrapper */}
+                </div>
+
+                <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+                  <div style={{ background: '#FFF7ED', borderBottom: '1px solid #FED7AA', padding: '12px 20px', borderRadius: '12px 12px 0 0' }}>
+                    <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#7C2D12' }}>評価点・コメント</h3>
+                  </div>
+                  <div style={{ padding: '20px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span style={{ width: '120px', fontSize: '14px', color: '#6b7280' }}>評価点</span>
+                      <span style={{ fontSize: '14px', color: '#111' }}>{assessmentScore || '—'}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                      <span style={{ width: '120px', fontSize: '14px', color: '#6b7280', paddingTop: '2px' }}>査定コメント</span>
+                      <span style={{ fontSize: '14px', color: '#111', whiteSpace: 'pre-wrap' }}>{assessmentComment || '—'}</span>
+                    </div>
+                  </div>
+                  </div>{/* padding wrapper */}
+                </div>
+
               </div>
-            ) : (
-              <div style={{ padding: '2rem', textAlign: 'center', color: '#ccc', fontSize: '13px', background: '#fafafa', borderRadius: '8px' }}>写真なし</div>
             )}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Link href={`/vehicles/${v.id}/purchase-contract`} style={{ padding: '10px 20px', background: '#e65100', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>
-              📋 買取契約書を作成
-            </Link>
+
+            {/* ===== 契約サブタブ ===== */}
+            {purchaseSubTab === '契約' && (
+              purchaseContract ? (
+                <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px' }}>
+                  <h3 style={{ fontSize: '14px', fontWeight: 600, margin: '0 0 14px' }}>買取契約書</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', fontSize: '13px', marginBottom: '16px' }}>
+                    <div><span style={{ color: '#aaa', fontSize: '11px' }}>契約日</span><div style={{ fontWeight: 500, marginTop: '2px' }}>{purchaseContract.contract_date ?? '—'}</div></div>
+                    <div><span style={{ color: '#aaa', fontSize: '11px' }}>契約金額</span><div style={{ fontWeight: 500, marginTop: '2px' }}>{purchaseContract.contract_amount ? `¥${Number(purchaseContract.contract_amount).toLocaleString()}` : '—'}</div></div>
+                    <div><span style={{ color: '#aaa', fontSize: '11px' }}>売主名</span><div style={{ fontWeight: 500, marginTop: '2px' }}>{purchaseContract.seller_name || '—'}</div></div>
+                    <div><span style={{ color: '#aaa', fontSize: '11px' }}>支払方法</span><div style={{ fontWeight: 500, marginTop: '2px' }}>{purchaseContract.payment_method || '—'}</div></div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <Link href={`/vehicles/${v.id}/purchase-contract`} style={{ padding: '8px 18px', background: '#e65100', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>
+                      📋 契約書を確認・編集
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '32px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                  <p style={{ margin: 0, color: '#aaa', fontSize: '13px' }}>買取契約書がまだ作成されていません</p>
+                  <Link href={`/vehicles/${v.id}/purchase-contract`} style={{ padding: '10px 20px', background: '#e65100', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>
+                    📋 買取契約書を作成
+                  </Link>
+                </div>
+              )
+            )}
+
+            {/* ===== 譲渡書類サブタブ ===== */}
+            {purchaseSubTab === '譲渡書類' && (
+              <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', overflow: 'hidden' }}>
+                <div style={{ background: '#F5F3FF', borderBottom: '1px solid #DDD6FE', padding: '12px 20px', borderRadius: '12px 12px 0 0' }}>
+                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#4C1D95' }}>譲渡書類</h3>
+                </div>
+                <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {/* 1枚ずつの書類写真 */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {TRANSFER_DOC_ITEMS.map(({ key, label, col }) => {
+                    const url = transferDocs[key]
+                    const uploading = transferDocUploading[key]
+                    return (
+                      <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '12px', color: '#666', width: '100px', flexShrink: 0 }}>{label}</span>
+                        {url ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <img src={url} alt={label} onClick={() => { setImageModalUrl(url); setShowImageModal(true) }}
+                              style={{ width: '60px', height: '45px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #eee', cursor: 'zoom-in' }} />
+                            <label style={{ padding: '3px 8px', background: '#f1f3f4', color: '#555', borderRadius: '4px', fontSize: '11px', cursor: uploading ? 'wait' : 'pointer', userSelect: 'none' }}>
+                              変更
+                              <input type="file" accept="image/*" onChange={e => handleTransferDocSingleUpload(e, key, col)} style={{ display: 'none' }} disabled={uploading} />
+                            </label>
+                            <button onClick={() => deleteTransferDocSingle(key, col)}
+                              style={{ padding: '3px 8px', background: '#fff5f5', color: '#e53e3e', border: '1px solid #fce8e6', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                              削除
+                            </button>
+                          </div>
+                        ) : (
+                          <label style={{ padding: '4px 12px', background: uploading ? '#f8f9fa' : '#f0f7ff', color: uploading ? '#aaa' : '#1a73e8', border: '1px solid', borderColor: uploading ? '#eee' : '#c8e0fa', borderRadius: '6px', fontSize: '11px', cursor: uploading ? 'wait' : 'pointer', userSelect: 'none' }}>
+                            {uploading ? 'アップロード中...' : 'アップロード'}
+                            <input type="file" accept="image/*" onChange={e => handleTransferDocSingleUpload(e, key, col)} style={{ display: 'none' }} disabled={uploading} />
+                          </label>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ borderTop: '1px solid #f0f0f0' }} />
+                {/* その他（5枠固定） */}
+                <div>
+                  <h4 style={{ fontSize: '13px', fontWeight: 600, margin: '0 0 10px' }}>その他</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
+                    {transferDocImages.map((url, i) => (
+                      <div key={i} style={{ position: 'relative' }}>
+                        {url ? (
+                          <>
+                            <img src={url} alt="" onClick={() => { setImageModalUrl(url); setShowImageModal(true) }}
+                              style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: '6px', border: '1px solid #eee', cursor: 'zoom-in', display: 'block' }} />
+                            <button onClick={() => deleteTransferDocImg(i)}
+                              style={{ position: 'absolute', top: '3px', right: '3px', width: '18px', height: '18px', background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', color: 'white', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0 }}>
+                              ×
+                            </button>
+                          </>
+                        ) : (
+                          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', aspectRatio: '4/3', background: '#f8f9fa', borderRadius: '6px', border: '1.5px dashed #ddd', cursor: transferImgUploading ? 'wait' : 'pointer' }}>
+                            <span style={{ fontSize: '18px', color: '#ccc' }}>+</span>
+                            <input type="file" accept="image/*" onChange={e => handleTransferDocImgUpload(e, i)} style={{ display: 'none' }} disabled={transferImgUploading} />
+                          </label>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ borderTop: '1px solid #f0f0f0' }} />
+                {/* コメント */}
+                <div>
+                  <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '4px' }}>コメント</label>
+                  <textarea value={transferComment} rows={3}
+                    onChange={e => setTransferComment(e.target.value)}
+                    onBlur={async e => { await supabase.from('vehicles').update({ transfer_comment: e.target.value || null }).eq('id', id as string) }}
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', resize: 'vertical', boxSizing: 'border-box' }} />
+                </div>
+                </div>{/* padding wrapper */}
+              </div>
+            )}
+
+            {/* ===== 支払サブタブ ===== */}
+            {purchaseSubTab === '支払' && (
+              <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '48px 20px', textAlign: 'center', color: '#bbb', fontSize: '13px' }}>
+                準備中
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -398,89 +1197,280 @@ export default function VehicleDetailPage() {
       {/* ===== 在庫タブ ===== */}
       {tab === '在庫' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 600, margin: '0 0 16px' }}>物件情報</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 24px' }}>
-              <div>
-                {cell('メーカー', v.master_makers?.name)}
-                {cell('車種', v.master_models?.name)}
-                {cell('年式', v.year ? v.year + '年' : null)}
-                {cell('走行距離', v.mileage ? v.mileage.toLocaleString() + 'km' : null)}
-              </div>
-              <div>
-                {cell('車台番号', v.chassis_number)}
-                {cell('車両ナンバー', v.car_number)}
-                {cell('シフト', v.shift)}
-                {cell('外装色', v.master_colors?.name ?? v.color)}
-              </div>
-              <div>
-                {cell('修復歴', v.repair_history ? 'あり' : 'なし')}
-                {cell('車検満了', v.inspection_date)}
-                {cell('排気量', v.displacement ? v.displacement + 'cc' : null)}
+          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', overflow: 'hidden' }}>
+            {/* ヘッダー */}
+            <div style={{ padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #B5D4F4', background: '#E6F1FB', borderRadius: '12px 12px 0 0' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: '#0C447C' }}>💴 販売価格（WEB標準見積）</h3>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {!editingEstimate ? (
+                  <button onClick={() => setEditingEstimate(true)}
+                    style={{ padding: '6px 14px', background: 'white', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                    編集
+                  </button>
+                ) : (
+                  <>
+                    <button onClick={() => setEditingEstimate(false)}
+                      style={{ padding: '6px 14px', background: 'white', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                      キャンセル
+                    </button>
+                    <button onClick={handleSaveEstimate} disabled={estimateSaving}
+                      style={{ padding: '6px 14px', background: '#1a73e8', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                      {estimateSaving ? '保存中...' : '保存'}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
-          </div>
-          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '14px', fontWeight: 600, margin: 0 }}>販売価格（デフォルト見積）</h3>
-              {!editingStock && (
-                <button onClick={() => { setEditingStock(true); setEditForm({ body_price: v.body_price ?? '', total_price: v.total_price ?? '', repair_history: v.repair_history ?? false }) }}
-                  style={{ padding: '5px 14px', background: '#f1f3f4', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#555', fontWeight: 500 }}>
-                  販売情報を編集
-                </button>
-              )}
-            </div>
-            {!editingStock ? (
-              <>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '12px' }}>
+
+            {/* 表示モード */}
+            {!editingEstimate && (
+              <div style={{ padding: '20px' }}>
+                {/* 3列サマリー */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                   {[
-                    { label: '車体価格', value: v.list_price ?? v.body_price },
-                    { label: '諸費用', value: v.misc_fee },
-                    { label: '支払総額', value: v.total_payment ?? v.total_price },
-                  ].map(f => (
-                    <div key={f.label} style={{ background: '#f8f9fa', borderRadius: '8px', padding: '14px' }}>
-                      <div style={{ fontSize: '12px', color: '#888', marginBottom: '6px' }}>{f.label}</div>
-                      <div style={{ fontSize: '20px', fontWeight: 700 }}>{f.value ? '¥' + f.value.toLocaleString() : '—'}</div>
+                    { label: '車体価格（税込）', value: parseInt(sellingPrice) || 0 },
+                    { label: '諸費用合計', value: expenseItems.reduce((s, e) => s + (e.amount || 0), 0) + optionItems.reduce((s, o) => s + (o.amount || 0), 0) },
+                    { label: '支払総額', value: (parseInt(sellingPrice) || 0) + expenseItems.reduce((s, e) => s + (e.amount || 0), 0) + optionItems.reduce((s, o) => s + (o.amount || 0), 0) },
+                  ].map(({ label, value }) => (
+                    <div key={label} style={{ background: '#f8f9fa', borderRadius: '8px', padding: '14px' }}>
+                      <div style={{ fontSize: '12px', color: '#888', marginBottom: '6px' }}>{label}</div>
+                      <div style={{ fontSize: '20px', fontWeight: 700 }}>{value ? '¥' + value.toLocaleString() : '—'}</div>
                     </div>
                   ))}
                 </div>
-                {cell('修復歴', v.repair_history ? 'あり' : 'なし')}
-              </>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>車体価格（円）</label>
-                    <input type="number" value={editForm.body_price} onChange={e => setEditForm((f: any) => ({ ...f, body_price: e.target.value }))}
-                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' }} />
+                {/* 内訳 */}
+                {(expenseItems.length > 0 || optionItems.length > 0) && (
+                  <div style={{ fontSize: '13px', color: '#6b7280' }}>
+                    <div style={{ marginBottom: '4px', fontWeight: 500, color: '#374151' }}>諸費用内訳</div>
+                    {expenseItems.filter(e => e.amount > 0).map((e, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #f3f4f6' }}>
+                        <span>{e.label}</span><span>¥{e.amount.toLocaleString()}</span>
+                      </div>
+                    ))}
+                    {optionItems.filter(o => o.amount > 0).map((o, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #f3f4f6', color: '#1a73e8' }}>
+                        <span>【OP】{o.label}</span><span>¥{o.amount.toLocaleString()}</span>
+                      </div>
+                    ))}
                   </div>
-                  <div>
-                    <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>支払総額（円）</label>
-                    <input type="number" value={editForm.total_price} onChange={e => setEditForm((f: any) => ({ ...f, total_price: e.target.value }))}
-                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', boxSizing: 'border-box' }} />
+                )}
+              </div>
+            )}
+
+            {/* 編集モード */}
+            {editingEstimate && (
+              <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+                {/* 車体価格 */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', color: '#6b7280', marginBottom: '6px', fontWeight: 500 }}>車体価格（税込）</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '14px', color: '#374151' }}>¥</span>
+                    <input
+                      type="number"
+                      value={sellingPrice}
+                      onChange={e => setSellingPrice(e.target.value)}
+                      placeholder="例：1980000"
+                      style={{ width: '200px', padding: '8px 12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '14px' }}
+                    />
+                    {sellingPrice && (
+                      <span style={{ fontSize: '13px', color: '#6b7280' }}>
+                        本体：¥{(parseInt(sellingPrice) - Math.floor(parseInt(sellingPrice) / 11)).toLocaleString()}
+                        　消費税：¥{Math.floor(parseInt(sellingPrice) / 11).toLocaleString()}
+                      </span>
+                    )}
                   </div>
                 </div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={editForm.repair_history} onChange={e => setEditForm((f: any) => ({ ...f, repair_history: e.target.checked }))} style={{ width: '16px', height: '16px' }} />
-                  修復歴あり
-                </label>
-                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                  <button onClick={async () => { await updateVehicle({ body_price: editForm.body_price ? parseInt(editForm.body_price) : null, total_price: editForm.total_price ? parseInt(editForm.total_price) : null, repair_history: editForm.repair_history }); setEditingStock(false) }}
-                    disabled={saving}
-                    style={{ flex: 1, padding: '9px', background: '#0070f3', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
-                    {saving ? '保存中...' : '保存'}
+
+                {/* 諸費用 */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <label style={{ fontSize: '13px', color: '#6b7280', fontWeight: 500 }}>諸費用明細</label>
+                    <button onClick={initExpensesFromMaster}
+                      style={{ padding: '4px 10px', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#555' }}>
+                      マスタから読込
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {expenseItems.map((item, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input
+                          value={item.label}
+                          onChange={e => setExpenseItems(prev => prev.map((p, idx) => idx === i ? { ...p, label: e.target.value } : p))}
+                          style={{ flex: 1, padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px' }}
+                          placeholder="項目名"
+                        />
+                        <span style={{ fontSize: '13px', color: '#6b7280' }}>¥</span>
+                        <input
+                          type="number"
+                          value={item.amount}
+                          onChange={e => setExpenseItems(prev => prev.map((p, idx) => idx === i ? { ...p, amount: parseInt(e.target.value) || 0 } : p))}
+                          style={{ width: '120px', padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px' }}
+                        />
+                        <button onClick={() => setExpenseItems(prev => prev.filter((_, idx) => idx !== i))}
+                          style={{ padding: '6px 8px', background: '#fff5f5', color: '#e53e3e', border: '1px solid #fce8e6', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                          削除
+                        </button>
+                      </div>
+                    ))}
+                    <button onClick={() => setExpenseItems(prev => [...prev, { label: '', amount: 0 }])}
+                      style={{ padding: '7px', background: '#f9fafb', border: '1px dashed #d1d5db', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', color: '#6b7280' }}>
+                      ＋ 諸費用を追加
+                    </button>
+                  </div>
+                </div>
+
+                {/* オプション */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', color: '#6b7280', fontWeight: 500, marginBottom: '10px' }}>オプション</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {optionItems.map((item, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input
+                          value={item.label}
+                          onChange={e => setOptionItems(prev => prev.map((p, idx) => idx === i ? { ...p, label: e.target.value } : p))}
+                          style={{ flex: 1, padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px' }}
+                          placeholder="オプション名"
+                        />
+                        <span style={{ fontSize: '13px', color: '#6b7280' }}>¥</span>
+                        <input
+                          type="number"
+                          value={item.amount}
+                          onChange={e => setOptionItems(prev => prev.map((p, idx) => idx === i ? { ...p, amount: parseInt(e.target.value) || 0 } : p))}
+                          style={{ width: '120px', padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px' }}
+                        />
+                        <button onClick={() => setOptionItems(prev => prev.filter((_, idx) => idx !== i))}
+                          style={{ padding: '6px 8px', background: '#fff5f5', color: '#e53e3e', border: '1px solid #fce8e6', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                          削除
+                        </button>
+                      </div>
+                    ))}
+                    <button onClick={() => setOptionItems(prev => [...prev, { label: '', amount: 0 }])}
+                      style={{ padding: '7px', background: '#f9fafb', border: '1px dashed #d1d5db', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', color: '#6b7280' }}>
+                      ＋ オプションを追加
+                    </button>
+                  </div>
+                </div>
+
+                {/* 合計サマリー */}
+                <div style={{ background: '#f0f7ff', borderRadius: '10px', padding: '16px', border: '1px solid #bfdbfe' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#6b7280' }}>車体価格（税込）</span>
+                      <span>¥{(parseInt(sellingPrice) || 0).toLocaleString()}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#6b7280' }}>諸費用合計</span>
+                      <span>¥{expenseItems.reduce((s, e) => s + (e.amount || 0), 0).toLocaleString()}</span>
+                    </div>
+                    {optionItems.length > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#6b7280' }}>オプション合計</span>
+                        <span>¥{optionItems.reduce((s, o) => s + (o.amount || 0), 0).toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '15px', borderTop: '1px solid #bfdbfe', paddingTop: '8px', marginTop: '4px' }}>
+                      <span style={{ color: '#1d4ed8' }}>支払総額</span>
+                      <span style={{ color: '#1d4ed8' }}>¥{((parseInt(sellingPrice) || 0) + expenseItems.reduce((s, e) => s + (e.amount || 0), 0) + optionItems.reduce((s, o) => s + (o.amount || 0), 0)).toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            )}
+          </div>
+          {/* 装備・仕様カード */}
+          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', overflow: 'hidden' }}>
+            <div
+              style={{ padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', background: '#F0FDF4', borderBottom: (equipmentOpen || editingEquipment) ? '1px solid #BBF7D0' : 'none', borderRadius: '12px 12px 0 0' }}
+              onClick={() => { if (!editingEquipment) setEquipmentOpen(o => !o) }}>
+              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#14532D', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                🔧 装備・仕様
+                <span style={{ fontSize: '11px', color: '#9ca3af', fontWeight: 400 }}>{equipmentOpen ? '▲ 閉じる' : '▼ 開く'}</span>
+                {equipment.length > 0 && <span style={{ fontSize: '12px', color: '#1a73e8', fontWeight: 500 }}>{equipment.length}項目選択中</span>}
+              </h3>
+              <div style={{ display: 'flex', gap: '8px' }} onClick={e => e.stopPropagation()}>
+                {equipmentOpen && !editingEquipment && (
+                  <button onClick={() => setEditingEquipment(true)}
+                    style={{ padding: '6px 14px', background: 'white', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                    編集
                   </button>
-                  <button onClick={() => setEditingStock(false)}
-                    style={{ flex: 1, padding: '9px', background: '#f1f3f4', color: '#555', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
-                    キャンセル
-                  </button>
+                )}
+                {editingEquipment && (
+                  <>
+                    <button onClick={() => setEditingEquipment(false)}
+                      style={{ padding: '6px 14px', background: 'white', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                      キャンセル
+                    </button>
+                    <button onClick={handleSaveEquipment}
+                      style={{ padding: '6px 14px', background: '#1a73e8', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                      保存
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {(equipmentOpen || editingEquipment) && (
+              <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {EQUIPMENT_SECTIONS.map(({ label, items }) => (
+                  <div key={label}>
+                    <h4 style={{ margin: '0 0 10px', fontSize: '13px', fontWeight: 600, color: '#555' }}>{label}</h4>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      {items.map(item => {
+                        const selected = equipment.includes(item)
+                        return (
+                          <button
+                            key={item}
+                            onClick={() => {
+                              if (!editingEquipment) return
+                              setEquipment(prev =>
+                                selected ? prev.filter(e => e !== item) : [...prev, item]
+                              )
+                            }}
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: '6px',
+                              border: `1px solid ${selected ? '#f9a8d4' : '#e5e7eb'}`,
+                              background: selected ? '#fdf2f8' : 'white',
+                              color: selected ? '#be185d' : '#374151',
+                              fontSize: '13px',
+                              cursor: editingEquipment ? 'pointer' : 'default',
+                              fontWeight: selected ? 600 : 400,
+                            }}
+                          >
+                            {item}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+
+                {/* チューニング */}
+                <div>
+                  <h4 style={{ margin: '0 0 10px', fontSize: '13px', fontWeight: 600, color: '#555' }}>チューニング・カスタム内容</h4>
+                  {editingEquipment ? (
+                    <textarea
+                      value={tuningNotes}
+                      onChange={e => setTuningNotes(e.target.value)}
+                      placeholder="例：車高調・マフラー交換・エンジンチューニングなど"
+                      rows={3}
+                      style={{ width: '100%', padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', resize: 'vertical', boxSizing: 'border-box' }}
+                    />
+                  ) : (
+                    <p style={{ margin: 0, fontSize: '13px', color: tuningNotes ? '#111' : '#9ca3af' }}>
+                      {tuningNotes || '未入力'}
+                    </p>
+                  )}
                 </div>
               </div>
             )}
           </div>
-          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '14px', fontWeight: 600, margin: 0 }}>WEB用写真</h3>
+
+          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', overflow: 'hidden' }}>
+            <div style={{ background: '#FFF7ED', borderBottom: '1px solid #FED7AA', padding: '12px 20px', borderRadius: '12px 12px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#7C2D12', margin: 0 }}>WEB用写真</h3>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 {!editingPhoto ? (
                   <button onClick={() => setEditingPhoto(true)}
@@ -503,6 +1493,7 @@ export default function VehicleDetailPage() {
                 )}
               </div>
             </div>
+            <div style={{ padding: '20px' }}>
             {photoUrls.length > 0 ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 {/* 左：メイン画像（aspect-ratio 4/3） */}
@@ -566,6 +1557,7 @@ export default function VehicleDetailPage() {
                 )}
               </div>
             )}
+            </div>{/* padding wrapper */}
           </div>
         </div>
       )}
@@ -866,6 +1858,71 @@ export default function VehicleDetailPage() {
                   </button>
                 </div>
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ===== 販売タブ ===== */}
+      {tab === '販売' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+          {/* 新規見積作成ボタン */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <a href={`/vehicles/${id}/estimates/new`}
+              style={{ padding: '10px 20px', background: '#1a73e8', color: 'white', borderRadius: '8px', fontSize: '14px', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              ＋ 新規見積・契約書作成
+            </a>
+          </div>
+
+          {/* 履歴一覧 */}
+          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', overflow: 'hidden' }}>
+            <div style={{ padding: '12px 20px', background: '#E6F1FB', borderBottom: '1px solid #B5D4F4' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0C447C' }}>📋 見積・契約書履歴</h3>
+            </div>
+            {salesEstimates.length === 0 ? (
+              <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af', fontSize: '14px' }}>
+                見積・契約書はまだありません
+              </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#f8f9fa', borderBottom: '1px solid #eee' }}>
+                    {['作成日時', '顧客名', '担当', '支払総額', 'ステータス', ''].map(h => (
+                      <th key={h} style={{ padding: '10px 16px', fontSize: '12px', color: '#6b7280', fontWeight: 500, textAlign: 'left' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {salesEstimates.map((est, i) => (
+                    <tr key={est.id} style={{ borderBottom: '1px solid #f3f4f6', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                      <td style={{ padding: '12px 16px', fontSize: '13px' }}>
+                        {new Date(est.created_at).toLocaleDateString('ja-JP')}
+                      </td>
+                      <td style={{ padding: '12px 16px', fontSize: '13px' }}>{est.buyer_name || '—'}</td>
+                      <td style={{ padding: '12px 16px', fontSize: '13px' }}>{est.staff_name || '—'}</td>
+                      <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 600 }}>
+                        {est.total_amount ? `¥${est.total_amount.toLocaleString()}` : '—'}
+                      </td>
+                      <td style={{ padding: '12px 16px' }}>
+                        <span style={{
+                          padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 500,
+                          background: est.status === 'contracted' ? '#d1fae5' : est.status === 'draft' ? '#f3f4f6' : '#fef3c7',
+                          color: est.status === 'contracted' ? '#065f46' : est.status === 'draft' ? '#6b7280' : '#92400e',
+                        }}>
+                          {est.status === 'contracted' ? '契約済' : est.status === 'draft' ? '下書き' : '見積中'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px 16px' }}>
+                        <a href={`/estimates/${est.id}`}
+                          style={{ padding: '5px 12px', background: 'white', border: '1px solid #ddd', borderRadius: '6px', fontSize: '12px', color: '#374151', textDecoration: 'none' }}>
+                          開く
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
         </div>

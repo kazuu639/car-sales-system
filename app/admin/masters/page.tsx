@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 export default function MastersPage() {
   const [tab, setTab] = useState<'countries' | 'makers' | 'models' | 'colors'>('countries')
@@ -13,6 +14,8 @@ export default function MastersPage() {
   const [selectedCountry, setSelectedCountry] = useState('')
   const [selectedMaker, setSelectedMaker] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadingOverlay, setLoadingOverlay] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('処理中...')
 
   const fetchAll = async () => {
     const [c, m, mo, col] = await Promise.all([
@@ -31,20 +34,23 @@ export default function MastersPage() {
 
   const handleAdd = async () => {
     if (!newName.trim()) return
+    setLoadingMessage('追加中...')
+    setLoadingOverlay(true)
     setLoading(true)
     if (tab === 'countries') {
       await supabase.from('master_countries').insert({ name: newName, sort_order: countries.length + 1 })
     } else if (tab === 'makers') {
-      if (!selectedCountry) { alert('国を選択してください'); setLoading(false); return }
+      if (!selectedCountry) { alert('国を選択してください'); setLoadingOverlay(false); setLoading(false); return }
       await supabase.from('master_makers').insert({ name: newName, country_id: selectedCountry, sort_order: makers.length + 1 })
     } else if (tab === 'models') {
-      if (!selectedMaker) { alert('メーカーを選択してください'); setLoading(false); return }
+      if (!selectedMaker) { alert('メーカーを選択してください'); setLoadingOverlay(false); setLoading(false); return }
       await supabase.from('master_models').insert({ name: newName, maker_id: selectedMaker, sort_order: models.length + 1 })
     } else if (tab === 'colors') {
       await supabase.from('master_colors').insert({ name: newName, sort_order: colors.length + 1 })
     }
     setNewName('')
     await fetchAll()
+    setLoadingOverlay(false)
     setLoading(false)
   }
 
@@ -66,6 +72,7 @@ export default function MastersPage() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
+      {loadingOverlay && <LoadingOverlay message={loadingMessage} />}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <div>
           <h1 style={{ fontSize: '22px', fontWeight: 700, margin: 0 }}>マスターデータ管理</h1>

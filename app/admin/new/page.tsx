@@ -3,10 +3,13 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 export default function NewStaffPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [loadingOverlay, setLoadingOverlay] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('処理中...')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -15,6 +18,8 @@ export default function NewStaffPage() {
   const [error, setError] = useState('')
 
   const handleSubmit = async () => {
+    setLoadingMessage('登録中...')
+    setLoadingOverlay(true)
     setLoading(true)
     setError('')
 
@@ -25,6 +30,7 @@ export default function NewStaffPage() {
     })
 
     const data = await res.json()
+    setLoadingOverlay(false)
     setLoading(false)
 
     if (!res.ok) {
@@ -36,6 +42,7 @@ export default function NewStaffPage() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '500px', margin: '0 auto' }}>
+      {loadingOverlay && <LoadingOverlay message={loadingMessage} />}
       <a href="/admin" style={{ fontSize: '13px', color: '#0070f3', textDecoration: 'none' }}>← スタッフ管理に戻る</a>
       <h1 style={{ fontSize: '22px', margin: '1rem 0 1.5rem' }}>スタッフ追加</h1>
 

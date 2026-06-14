@@ -3,10 +3,13 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 export default function ProfilePage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [loadingOverlay, setLoadingOverlay] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('処理中...')
   const [profile, setProfile] = useState<any>(null)
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
@@ -29,6 +32,10 @@ export default function ProfilePage() {
   }
 
   const handleSubmit = async () => {
+    setLoadingMessage('保存中...')
+    setLoadingOverlay(true)
+    setLoadingMessage('保存中...')
+    setLoadingOverlay(true)
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
@@ -52,6 +59,7 @@ export default function ProfilePage() {
       avatar_url: avatarUrl,
     }).eq('id', user.id)
 
+    setLoadingOverlay(false)
     setLoading(false)
     router.push('/')
   }
@@ -67,6 +75,7 @@ export default function ProfilePage() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '500px', margin: '0 auto' }}>
+      {loadingOverlay && <LoadingOverlay message={loadingMessage} />}
       <a href="/" style={{ fontSize: '13px', color: '#0070f3', textDecoration: 'none' }}>← ホームに戻る</a>
       <h1 style={{ fontSize: '22px', margin: '1rem 0 1.5rem' }}>プロフィール編集</h1>
 

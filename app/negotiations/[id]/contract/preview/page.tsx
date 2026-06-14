@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 export default function ContractPreviewPage() {
   const { id } = useParams()
@@ -16,6 +17,8 @@ export default function ContractPreviewPage() {
   const [customer, setCustomer] = useState<any>(null)
   const [company, setCompany] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingOverlay, setLoadingOverlay] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('処理中...')
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -43,6 +46,8 @@ export default function ContractPreviewPage() {
   }, [id, contractId])
 
   const handleConfirm = async () => {
+    setLoadingMessage('処理中...')
+    setLoadingOverlay(true)
     setLoading(true)
     await supabase.from('contracts').update({ status: '締結済' }).eq('id', contractId as string)
     await supabase.from('negotiations').update({ status: '成約' }).eq('id', id as string)
@@ -53,12 +58,16 @@ export default function ContractPreviewPage() {
       current_step: 1,
     }]).select().single()
 
+    setLoadingOverlay(false)
     router.push(`/deliveries/${delivery.id}`)
   }
 
   const handleSaveOnly = async () => {
+    setLoadingMessage('保存中...')
+    setLoadingOverlay(true)
     setLoading(true)
     await supabase.from('contracts').update({ status: '作成済' }).eq('id', contractId as string)
+    setLoadingOverlay(false)
     router.push(`/negotiations/${id}`)
   }
 
@@ -316,6 +325,7 @@ export default function ContractPreviewPage() {
   return (
     <>
       <style>{`
+      {loadingOverlay && <LoadingOverlay message={loadingMessage} />}
         @media print {
           #action-bar { display: none !important; }
           nav { display: none !important; }

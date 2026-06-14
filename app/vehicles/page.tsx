@@ -25,7 +25,20 @@ const WEB_ITEMS = [
   { key: 'web_goo',       label: 'グーネット' },
   { key: 'web_hp',        label: 'HP' },
   { key: 'web_x',         label: 'X' },
+  { key: 'web_line',      label: 'LINE' },
 ]
+
+const CHECK_ITEMS = [
+  { key: 'purchase_check',   label: '仕入' },
+  { key: 'entry_check',      label: '入庫済' },
+  { key: 'car_wash_check',   label: '洗車済' },
+  { key: 'photo_shoot_check',label: '撮影済' },
+]
+
+function calcStockDays(stockDate: string | null): number | null {
+  if (!stockDate) return null
+  return Math.floor((Date.now() - new Date(stockDate).getTime()) / 86400000)
+}
 
 export default function VehiclesPage() {
   const [vehicles, setVehicles]     = useState<any[]>([])
@@ -181,11 +194,24 @@ export default function VehiclesPage() {
             該当する車両がありません
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: '900px' }}>
+            <colgroup>
+              <col style={{ width: '60px' }} />
+              <col style={{ width: '80px' }} />
+              <col style={{ width: '80px' }} />
+              <col style={{ width: '90px' }} />
+              <col style={{ width: '150px' }} />
+              <col style={{ width: '70px' }} />
+              <col style={{ width: '90px' }} />
+              <col style={{ width: '60px' }} />
+              <col style={{ width: '100px' }} />
+              <col style={{ width: '70px' }} />
+              <col style={{ width: '40px' }} />
+            </colgroup>
             <thead>
               <tr style={{ background: '#f8f9fa', borderBottom: '2px solid #f0f0f0' }}>
-                {['画像', '管理番号', 'メーカー・車種', '年式', '走行距離', '色', '車体価格', 'ステータス', ''].map((h, i) => (
-                  <th key={i} style={{ padding: '11px 16px', textAlign: 'left', fontSize: '11px', color: '#9aa0a6', fontWeight: 600, letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
+                {['画像', '管理番号', 'ステータス', '入庫日', 'メーカー・車種', '年式', '走行距離', '色', '車体価格', '在庫日数', ''].map((h, i) => (
+                  <th key={i} style={{ padding: '10px 8px', textAlign: 'left', fontSize: '11px', color: '#9aa0a6', fontWeight: 600, letterSpacing: '0.03em', whiteSpace: 'nowrap', overflow: 'hidden' }}>
                     {h}
                   </th>
                 ))}
@@ -202,107 +228,155 @@ export default function VehiclesPage() {
                       style={{
                         borderBottom: isExpanded ? 'none' : '1px solid #f4f4f4',
                         cursor: 'pointer',
-                        background: isExpanded ? '#f8faff' : 'white',
+                        background: isExpanded ? '#f0f5ff' : 'white',
                       }}
                       onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background = '#fafbff' }}
                       onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = 'white' }}
                     >
                       {/* 画像 */}
-                      <td style={{ padding: '10px 16px' }}>
+                      <td style={{ padding: '6px 8px' }}>
                         {v.image_urls?.length > 0 ? (
-                          <img src={v.image_urls[0]} alt="" style={{ width: '76px', height: '57px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #eee', display: 'block' }} />
+                          <img src={v.image_urls[0]} alt="" style={{ width: '52px', height: '40px', objectFit: 'cover', borderRadius: '5px', border: '1px solid #eee', display: 'block' }} />
                         ) : (
-                          <div style={{ width: '76px', height: '57px', background: '#f5f5f5', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', border: '1px solid #eee' }}>🚗</div>
+                          <div style={{ width: '52px', height: '40px', background: '#f5f5f5', borderRadius: '5px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', border: '1px solid #eee' }}>🚗</div>
                         )}
                       </td>
 
                       {/* 管理番号 */}
-                      <td style={{ padding: '14px 16px' }}>
-                        <span style={{ fontSize: '12px', color: '#aaa', fontFamily: 'monospace' }}>{v.db_number ?? '—'}</span>
+                      <td style={{ padding: '10px 8px', overflow: 'hidden' }}>
+                        <Link
+                          href={`/vehicles/${v.id}`}
+                          onClick={e => e.stopPropagation()}
+                          style={{ fontSize: '11px', color: '#555', fontFamily: 'monospace', fontWeight: 600, textDecoration: 'none', border: '1px solid #ddd', borderRadius: '5px', padding: '2px 6px', display: 'inline-block', whiteSpace: 'nowrap' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          {v.db_number ?? '—'}
+                        </Link>
+                      </td>
+
+                      {/* ステータスバッジ */}
+                      <td style={{ padding: '10px 8px', overflow: 'hidden' }}>
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '4px',
+                          fontSize: '11px', padding: '3px 7px', borderRadius: '20px', fontWeight: 600,
+                          background: cfg?.bg ?? '#f1f3f4', color: cfg?.color ?? '#5f6368',
+                        }}>
+                          <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: cfg?.dot ?? '#aaa', flexShrink: 0 }} />
+                          {v.status}
+                        </span>
+                      </td>
+
+                      {/* 入庫日 */}
+                      <td style={{ padding: '10px 8px', fontSize: '12px', color: '#555', overflow: 'hidden' }}>
+                        {v.stock_date ?? '―'}
                       </td>
 
                       {/* メーカー・車種 */}
-                      <td style={{ padding: '14px 16px' }}>
+                      <td style={{ padding: '10px 8px', overflow: 'hidden' }}>
                         {v.master_makers?.name && (
-                          <div style={{ fontSize: '11px', color: '#999', marginBottom: '2px' }}>{v.master_makers.name}</div>
+                          <div style={{ fontSize: '10px', color: '#999', marginBottom: '1px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v.master_makers.name}</div>
                         )}
-                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#111' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: '#111', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {v.master_models?.name ?? v.car_name ?? '—'}
                         </div>
                       </td>
 
                       {/* 年式 */}
-                      <td style={{ padding: '14px 16px', fontSize: '13px', color: '#555' }}>
+                      <td style={{ padding: '10px 8px', fontSize: '12px', color: '#555', overflow: 'hidden' }}>
                         {v.year ? `${v.year}年` : '—'}
                       </td>
 
                       {/* 走行距離 */}
-                      <td style={{ padding: '14px 16px', fontSize: '13px', color: '#555', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '10px 8px', fontSize: '12px', color: '#555', whiteSpace: 'nowrap', overflow: 'hidden' }}>
                         {v.mileage ? `${v.mileage.toLocaleString()} km` : '—'}
                       </td>
 
                       {/* 色 */}
-                      <td style={{ padding: '14px 16px', fontSize: '13px', color: '#555' }}>
+                      <td style={{ padding: '10px 8px', fontSize: '12px', color: '#555', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
                         {v.master_colors?.name ?? v.color ?? '—'}
                       </td>
 
                       {/* 車体価格 */}
-                      <td style={{ padding: '14px 16px', fontSize: '13px', fontWeight: 500, color: '#111', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '10px 8px', fontSize: '12px', fontWeight: 500, color: '#111', whiteSpace: 'nowrap', overflow: 'hidden' }}>
                         {v.body_price ? `¥${v.body_price.toLocaleString()}` : '—'}
                       </td>
 
-                      {/* ステータスバッジ */}
-                      <td style={{ padding: '14px 16px' }}>
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', gap: '5px',
-                          fontSize: '11px', padding: '4px 10px', borderRadius: '20px', fontWeight: 600,
-                          background: cfg?.bg ?? '#f1f3f4', color: cfg?.color ?? '#5f6368',
-                        }}>
-                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: cfg?.dot ?? '#aaa', flexShrink: 0 }} />
-                          {v.status}
-                        </span>
-                      </td>
+                      {/* 在庫日数 */}
+                      {(() => {
+                        const days = calcStockDays(v.stock_date)
+                        const color = days === null ? '#ccc' : days > 60 ? '#c0392b' : days > 30 ? '#e74c3c' : '#555'
+                        const fw = days !== null && days > 60 ? 700 : 400
+                        return (
+                          <td style={{ padding: '10px 8px', fontSize: '12px', color, fontWeight: fw, whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                            {days === null ? '―' : `${days}日`}
+                          </td>
+                        )
+                      })()}
 
                       {/* 展開アイコン */}
-                      <td style={{ padding: '14px 16px', textAlign: 'center', color: '#ccc', fontSize: '12px' }}>
+                      <td style={{ padding: '10px 0', textAlign: 'center', color: '#ccc', fontSize: '11px' }}>
                         {isExpanded ? '▲' : '▼'}
                       </td>
                     </tr>
 
                     {/* アコーディオン */}
                     {isExpanded && (
-                      <tr style={{ borderBottom: '1px solid #f0f0f0', background: '#f8faff' }}>
-                        <td colSpan={9} style={{ padding: '0 16px 16px' }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', paddingTop: '12px' }}>
+                      <tr style={{ borderBottom: '1px solid #d0dcf5', background: '#f0f5ff' }}>
+                        <td colSpan={11} style={{ padding: '8px 16px 16px' }}>
+                          <div style={{ display: 'flex', gap: '0', boxShadow: '0 4px 12px rgba(0,0,0,0.10)', borderRadius: '10px', background: 'white', overflow: 'hidden' }}>
 
-                            {/* 物件情報 */}
-                            <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #eee', padding: '14px' }}>
-                              <div style={{ fontSize: '11px', fontWeight: 700, color: '#888', letterSpacing: '0.05em', marginBottom: '10px', textTransform: 'uppercase' }}>物件情報</div>
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 12px' }}>
-                                {([
-                                  ['車台番号', v.chassis_number],
-                                  ['車両ナンバー', v.car_number],
-                                  ['シフト', v.shift],
-                                  ['修復歴', v.repair_history ? 'あり' : 'なし'],
-                                  ['車検満了', v.inspection_date],
-                                  ['排気量', v.displacement ? v.displacement + 'cc' : null],
-                                ] as [string, any][]).map(([label, value]) => (
-                                  <div key={label} style={{ display: 'flex', gap: '8px', fontSize: '12px', padding: '5px 0', borderBottom: '1px solid #f8f8f8' }}>
-                                    <span style={{ color: '#bbb', width: '72px', flexShrink: 0 }}>{label}</span>
-                                    <span style={{ color: '#333', fontWeight: 500 }}>{value ?? '—'}</span>
+                            {/* 4カラム情報グリッド */}
+                            {(() => {
+                              const hcell = (label: string, value: any) => (
+                                <div key={label} style={{ display: 'flex', gap: '6px', fontSize: '12px', marginBottom: '4px', alignItems: 'baseline' }}>
+                                  <span style={{ color: '#aaa', flexShrink: 0, minWidth: '68px' }}>{label}</span>
+                                  <span style={{ color: value ? '#222' : '#ccc', fontWeight: value ? 500 : 400 }}>{value || '―'}</span>
+                                </div>
+                              )
+                              const hsec = (title: string) => (
+                                <div style={{ fontSize: '10px', fontWeight: 700, color: '#bbb', letterSpacing: '0.08em', marginBottom: '7px', textTransform: 'uppercase' }}>{title}</div>
+                              )
+                              return (
+                                <div style={{ flex: 1, padding: '14px 18px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0 20px' }}>
+                                  <div>
+                                    {hsec('車輌')}
+                                    {hcell('車台番号', v.chassis_number)}
+                                    {hcell('シフト', v.shift)}
+                                    {hcell('車検満了', v.inspection_date)}
+                                    {hcell('車両ナンバー', v.car_number)}
+                                    {hcell('修復歴', v.repair_history ? 'あり' : null)}
+                                    {hcell('排気量', v.displacement ? v.displacement + 'cc' : null)}
                                   </div>
-                                ))}
-                              </div>
-                            </div>
+                                  <div>
+                                    {hsec('各契約日')}
+                                    {hcell('仕）契約日', v.purchase_contract_date)}
+                                    {hcell('入庫日', v.stock_date)}
+                                    {hcell('販）契約日', null)}
+                                    {hcell('売上日', null)}
+                                  </div>
+                                  <div>
+                                    {hsec('財務情報')}
+                                    {hcell('仕入金額', v.purchase_price ? `¥${v.purchase_price.toLocaleString()}` : null)}
+                                    {hcell('売上', null)}
+                                  </div>
+                                  <div>
+                                    {hsec('担当')}
+                                    {hcell('仕入担当', v.purchase_staff)}
+                                    {hcell('売上担当', null)}
+                                  </div>
+                                </div>
+                              )
+                            })()}
 
-                            {/* WEB掲載・チェック・アクション */}
-                            <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #eee', padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {/* WEB掲載・入庫チェック */}
+                            <div style={{ width: '190px', flexShrink: 0, borderLeft: '1px solid #eef0f5', padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                               <div>
-                                <div style={{ fontSize: '11px', fontWeight: 700, color: '#888', letterSpacing: '0.05em', marginBottom: '8px', textTransform: 'uppercase' }}>WEB掲載</div>
-                                <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                                <div style={{ fontSize: '10px', fontWeight: 700, color: '#bbb', letterSpacing: '0.08em', marginBottom: '6px', textTransform: 'uppercase' }}>WEB掲載</div>
+                                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                                   {WEB_ITEMS.map(w => (
                                     <span key={w.key} style={{
-                                      fontSize: '11px', padding: '3px 9px', borderRadius: '20px', fontWeight: 500,
+                                      fontSize: '11px', padding: '2px 7px', borderRadius: '20px', fontWeight: 500,
                                       background: v[w.key] ? '#e8f0fe' : '#f5f5f5',
                                       color: v[w.key] ? '#1a73e8' : '#bbb',
                                     }}>
@@ -312,38 +386,18 @@ export default function VehiclesPage() {
                                 </div>
                               </div>
                               <div>
-                                <div style={{ fontSize: '11px', fontWeight: 700, color: '#888', letterSpacing: '0.05em', marginBottom: '8px', textTransform: 'uppercase' }}>入庫チェック</div>
-                                <div style={{ display: 'flex', gap: '5px' }}>
-                                  {([
-                                    { key: 'entry_check',    label: '入庫済' },
-                                    { key: 'car_wash_check', label: '洗車済' },
-                                    { key: 'photo_shoot_check', label: '撮影済' },
-                                  ]).map(c => (
+                                <div style={{ fontSize: '10px', fontWeight: 700, color: '#bbb', letterSpacing: '0.08em', marginBottom: '6px', textTransform: 'uppercase' }}>入庫チェック</div>
+                                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                  {CHECK_ITEMS.map(c => (
                                     <span key={c.key} style={{
-                                      fontSize: '11px', padding: '3px 9px', borderRadius: '20px', fontWeight: 500,
-                                      background: v[c.key] ? '#e6f4ea' : '#f5f5f5',
-                                      color: v[c.key] ? '#1e7e34' : '#bbb',
+                                      fontSize: '11px', padding: '2px 7px', borderRadius: '20px', fontWeight: 500,
+                                      background: (v as any)[c.key] ? '#e6f4ea' : '#f5f5f5',
+                                      color: (v as any)[c.key] ? '#1e7e34' : '#bbb',
                                     }}>
-                                      {v[c.key] ? '✓ ' : ''}{c.label}
+                                      {(v as any)[c.key] ? '✓ ' : ''}{c.label}
                                     </span>
                                   ))}
                                 </div>
-                              </div>
-                              <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
-                                <Link
-                                  href={`/vehicles/${v.id}`}
-                                  onClick={e => e.stopPropagation()}
-                                  style={{ padding: '7px 18px', background: '#0070f3', color: 'white', borderRadius: '7px', textDecoration: 'none', fontSize: '12px', fontWeight: 600 }}
-                                >
-                                  詳細 →
-                                </Link>
-                                <Link
-                                  href={`/vehicles/${v.id}/edit`}
-                                  onClick={e => e.stopPropagation()}
-                                  style={{ padding: '7px 16px', background: '#f1f3f4', color: '#555', borderRadius: '7px', textDecoration: 'none', fontSize: '12px' }}
-                                >
-                                  編集
-                                </Link>
                               </div>
                             </div>
 

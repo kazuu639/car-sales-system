@@ -3,10 +3,24 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import LoadingOverlay from '@/components/LoadingOverlay'
+
+const PREFECTURES = [
+  '北海道','青森県','岩手県','宮城県','秋田県','山形県','福島県',
+  '茨城県','栃木県','群馬県','埼玉県','千葉県','東京都','神奈川県',
+  '新潟県','富山県','石川県','福井県','山梨県','長野県','岐阜県',
+  '静岡県','愛知県','三重県',
+  '滋賀県','京都府','大阪府','兵庫県','奈良県','和歌山県',
+  '鳥取県','島根県','岡山県','広島県','山口県',
+  '徳島県','香川県','愛媛県','高知県',
+  '福岡県','佐賀県','長崎県','熊本県','大分県','宮崎県','鹿児島県','沖縄県',
+]
 
 export default function NewCustomerPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [loadingOverlay, setLoadingOverlay] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('処理中...')
   const [form, setForm] = useState({
     氏名: '',
     氏名カナ: '',
@@ -18,19 +32,22 @@ export default function NewCustomerPage() {
     備考: '',
   })
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
 
   const handleSubmit = async () => {
     if (!form.氏名) { alert('氏名は必須です'); return }
+    setLoadingMessage('登録中...')
+    setLoadingOverlay(true)
     setLoading(true)
     const { error } = await supabase.from('customers').insert([{
       ...form,
       生年月日: form.生年月日 || null,
       company_id: '00000000-0000-0000-0000-000000000001',
     }])
-    if (error) { alert('エラー: ' + error.message); setLoading(false); return }
+    if (error) { alert('エラー: ' + error.message); setLoadingOverlay(false); setLoading(false); return }
+    setLoadingOverlay(false)
     router.push('/customers')
   }
 
@@ -42,6 +59,7 @@ export default function NewCustomerPage() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '700px', margin: '0 auto' }}>
+      {loadingOverlay && <LoadingOverlay message={loadingMessage} />}
       <div style={{ marginBottom: '1.5rem' }}>
         <Link href="/customers" style={{ fontSize: '13px', color: '#888', textDecoration: 'none' }}>← 顧客一覧に戻る</Link>
         <h1 style={{ fontSize: '22px', fontWeight: 700, margin: '8px 0 0' }}>顧客登録</h1>
@@ -67,19 +85,22 @@ export default function NewCustomerPage() {
             <input name="メール" value={form.メール} onChange={handleChange} placeholder="example@mail.com" style={fieldStyle} />
           </div>
         </div>
-        <div>
-          <label style={labelStyle}>住所</label>
-          <input name="住所" value={form.住所} onChange={handleChange} placeholder="東京都渋谷区..." style={fieldStyle} />
-        </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div>
+            <label style={labelStyle}>都道府県</label>
+            <select name="住所" value={form.住所} onChange={handleChange} style={fieldStyle}>
+              <option value="">選択してください</option>
+              {PREFECTURES.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
           <div>
             <label style={labelStyle}>生年月日</label>
             <input type="date" name="生年月日" value={form.生年月日} onChange={handleChange} style={fieldStyle} />
           </div>
-          <div>
-            <label style={labelStyle}>免許証番号</label>
-            <input name="免許証番号" value={form.免許証番号} onChange={handleChange} placeholder="123456789012" style={fieldStyle} />
-          </div>
+        </div>
+        <div>
+          <label style={labelStyle}>免許証番号</label>
+          <input name="免許証番号" value={form.免許証番号} onChange={handleChange} placeholder="123456789012" style={fieldStyle} />
         </div>
         <div>
           <label style={labelStyle}>備考</label>

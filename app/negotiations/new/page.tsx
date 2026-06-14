@@ -3,7 +3,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
-import { useProfile } from '@/hooks/useProfile'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 const SOURCES = [
   { value: 'carsensor', label: 'カーセンサー', color: '#c0392b', bg: '#fde8e8' },
@@ -20,143 +20,220 @@ const SOURCES = [
 ]
 
 const TITLE_CONFIG: Record<string, string> = {
-  purchase: '仕入商談 登録',
+  purchase: '買取商談 登録',
   sales:    '販売商談 登録',
+  inspection: '車検商談 登録',
+  repair:     '修理商談 登録',
+  dresup:     'ドレスUP商談 登録',
   other:    'その他商談 登録',
+}
+
+const BANNER_CONFIG: Record<string, { bg: string; border: string; color: string; sub: string; label: string }> = {
+  purchase: { bg: '#e6f4ea', border: '#a8d5b5', color: '#1e7e34', sub: '#2d6a3f', label: '買取問合せから引き継ぎ' },
+  sales:    { bg: '#e8f0fe', border: '#93b4f0', color: '#1a73e8', sub: '#1558b0', label: '販売問合せから引き継ぎ' },
+  other:    { bg: '#fff3e0', border: '#ffc080', color: '#e65100', sub: '#b83c00', label: 'その他問合せから引き継ぎ' },
 }
 
 function NewNegotiationContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { profile } = useProfile()
+
   const fromInquiry = searchParams.get('from_inquiry')
-  const inquiryCategory = searchParams.get('category') || 'sales'
-  const inquiryCustomerName = searchParams.get('customer_name') || ''
-  const inquiryPhone = searchParams.get('phone') || ''
 
   const [loading, setLoading] = useState(false)
+  const [loadingOverlay, setLoadingOverlay] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('処理中...')
+  const [submitted, setSubmitted] = useState(false)
   const [customers, setCustomers] = useState<any[]>([])
   const [vehicles, setVehicles] = useState<any[]>([])
   const [staffList, setStaffList] = useState<any[]>([])
+  const [inquiryData, setInquiryData] = useState<any>(null)
   const [purchaseInfo, setPurchaseInfo] = useState({
     maker: '', model: '', year: '', mileage: '',
     desired_price: '', chassis_number: '', color: '', repair_history: false,
   })
+  const [makers, setMakers] = useState<any[]>([])
+  const [allModels, setAllModels] = useState<any[]>([])
+  const [filteredModels, setFilteredModels] = useState<any[]>([])
+  const [purchaseMakerId, setPurchaseMakerId] = useState('')
   const [form, setForm] = useState({
     customer_id: '',
     vehicle_id: '',
-    category: inquiryCategory,
-    source: searchParams.get('source') || '',
-    assigned_to: searchParams.get('assigned_to') || '',
-    inquiry_date: searchParams.get('inquiry_date') || new Date().toISOString().split('T')[0],
-    visit_date: searchParams.get('visit_date') || '',
-    notes: searchParams.get('notes') || '',
+    category: searchParams.get('category') || 'sales',
+    source: '',
+    assigned_to: '',
+    inquiry_date: new Date().toISOString().split('T')[0],
+    visit_date: '',
+    notes: '',
   })
-
-  const BANNER_CONFIG: Record<string, { bg: string; border: string; color: string; subcolor: string; label: string }> = {
-    purchase: { bg: '#e6f4ea', border: '#a8d5b5', color: '#1e7e34', subcolor: '#2d6a3f', label: '買取問合せから引き継ぎ' },
-    sales:    { bg: '#e8f0fe', border: '#93b4f0', color: '#1a73e8', subcolor: '#1558b0', label: '販売問合せから引き継ぎ' },
-    other:    { bg: '#fff3e0', border: '#ffc080', color: '#e65100', subcolor: '#b83c00', label: 'その他問合せから引き継ぎ' },
-  }
 
   useEffect(() => {
     const load = async () => {
-      const [c, v, p, { data: { user } }] = await Promise.all([
+      const [c, v, p, { data: { user } }, mk, md] = await Promise.all([
         supabase.from('customers').select('*').order('作成日時', { ascending: false }),
         supabase.from('vehicles').select('*, master_makers(name), master_models(name)').is('deleted_at', null).order('created_at', { ascending: false }),
-        supabase.from('profiles').select('id, display_name, role').order('created_at', { ascending: true }),
+        supabase.from('profiles').select('id, display_name, role, company_id').order('created_at', { ascending: true }),
         supabase.auth.getUser(),
+        supabase.from('master_makers').select('*').order('sort_order'),
+        supabase.from('master_models').select('*').order('sort_order'),
       ])
       const customerList = c.data ?? []
-      const profileList = p.data ?? []
+      const profileList  = p.data ?? []
+      const makerList    = mk.data ?? []
+      const modelList    = md.data ?? []
       setCustomers(customerList)
       setVehicles(v.data ?? [])
       setStaffList(profileList)
+      setMakers(makerList)
+      setAllModels(modelList)
 
-      const currentProfile = profileList.find((pr: any) => pr.id === user?.id)
-      if (currentProfile && !searchParams.get('assigned_to')) {
-        setForm(f => ({ ...f, assigned_to: currentProfile.display_name }))
-      }
+      // 担当者デフォルト
+      const me = profileList.find((pr: any) => pr.id === user?.id)
+      if (me) setForm(f => ({ ...f, assigned_to: me.display_name }))
 
-      if (fromInquiry && (inquiryPhone || inquiryCustomerName)) {
-        const match = customerList.find((cu: any) =>
-          (inquiryPhone && cu.電話番号 === inquiryPhone) ||
-          (inquiryCustomerName && cu.氏名 === inquiryCustomerName)
-        )
-        if (match) {
-          setForm(f => ({ ...f, customer_id: match.id }))
+      // 問合せから引き継ぎ
+      if (fromInquiry) {
+        const { data: inq } = await supabase.from('inquiries').select('*').eq('id', fromInquiry).single()
+        if (inq) {
+          setInquiryData(inq)
+
+          // フォームに問合せ情報をセット
+          setForm(f => ({
+            ...f,
+            category:     inq.category || f.category,
+            source:       inq.source   || '',
+            inquiry_date: inq.inquiry_date || f.inquiry_date,
+            visit_date:   inq.visit_date   || '',
+            notes:        inq.memo         || '',
+          }))
+
+          // 顧客マッチング（customer_id直接参照を優先、なければ名前/電話で検索）
+          if (inq.customer_id) {
+            setForm(f => ({ ...f, customer_id: inq.customer_id }))
+          } else {
+            const match = customerList.find((cu: any) =>
+              (inq.phone && cu.電話番号 === inq.phone) ||
+              (inq.customer_name && cu.氏名 === inq.customer_name)
+            )
+            if (match) setForm(f => ({ ...f, customer_id: match.id }))
+          }
+
+          // 買取車両情報プリセット
+          if (inq.category === 'purchase') {
+            setPurchaseInfo({
+              maker:          inq.purchase_maker          || '',
+              model:          inq.purchase_model          || '',
+              year:           inq.purchase_year?.toString()          || '',
+              mileage:        inq.purchase_mileage?.toString()       || '',
+              desired_price:  inq.purchase_desired_price?.toString() || '',
+              chassis_number: inq.purchase_chassis_number || '',
+              color:          inq.purchase_color          || '',
+              repair_history: inq.purchase_repair_history || false,
+            })
+            // メーカーIDを名前から逆引きして車種を絞り込み
+            if (inq.purchase_maker) {
+              const foundMaker = makerList.find((m: any) => m.name === inq.purchase_maker)
+              if (foundMaker) {
+                setPurchaseMakerId(foundMaker.id)
+                setFilteredModels(modelList.filter((m: any) => m.maker_id === foundMaker.id))
+              }
+            }
+          }
         }
       }
     }
     load()
   }, [])
 
+  const sourceError = submitted && !form.source
+
   const handleSubmit = async () => {
-    setLoading(true)
-    let notesText = form.notes || ''
-    if (form.category === 'purchase') {
-      const fields: [string, string][] = [
-        ['メーカー',     purchaseInfo.maker],
-        ['車種',         purchaseInfo.model],
-        ['年式',         purchaseInfo.year ? purchaseInfo.year + '年' : ''],
-        ['走行距離',     purchaseInfo.mileage ? purchaseInfo.mileage + 'km' : ''],
-        ['希望買取金額', purchaseInfo.desired_price ? '¥' + Number(purchaseInfo.desired_price).toLocaleString() : ''],
-        ['車台番号',     purchaseInfo.chassis_number],
-        ['色',           purchaseInfo.color],
-        ['修復歴',       purchaseInfo.repair_history ? 'あり' : ''],
-      ]
-      const info = fields.filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join('\n')
-      if (info) notesText = `【買取車両情報】\n${info}${notesText ? '\n\n【備考】\n' + notesText : ''}`
+    console.log('handleSubmit called')
+    setSubmitted(true)
+    if (!form.source) {
+      setTimeout(() => {
+        const el = document.getElementById('source-field')
+        console.log('source-field el:', el)
+        console.log('scrollY:', window.scrollY)
+        if (el) {
+          const rect = el.getBoundingClientRect()
+          console.log('rect.top:', rect.top)
+          const top = rect.top + window.scrollY - 100
+          console.log('scrollTo top:', top)
+          window.scrollTo({ top, behavior: 'smooth' })
+        }
+      }, 50)
+      return
     }
+    setLoadingMessage('登録中...')
+    setLoadingOverlay(true)
+    setLoading(true)
+    const isPurchase = form.category === 'purchase'
     const { data, error } = await supabase.from('negotiations').insert([{
-      customer_id: form.customer_id || null,
-      vehicle_id: form.vehicle_id || null,
-      source: form.source || null,
-      assigned_to: form.assigned_to || null,
-      inquiry_date: form.inquiry_date,
-      visit_date: form.visit_date || null,
-      notes: notesText || null,
-      category: form.category || null,
-      status: '商談中',
-      company_id: profile?.company_id ?? null,
+      customer_id:             form.customer_id  || null,
+      vehicle_id:              form.vehicle_id   || null,
+      source:                  form.source       || null,
+      assigned_to:             form.assigned_to  || null,
+      inquiry_date:            form.inquiry_date,
+      visit_date:              form.visit_date   || null,
+      notes:                   form.notes        || null,
+      category:                form.category     || null,
+      status:                  '商談中',
+      company_id:              '00000000-0000-0000-0000-000000000001',
+      purchase_maker:          isPurchase ? (purchaseInfo.maker || null)          : null,
+      purchase_model:          isPurchase ? (purchaseInfo.model || null)          : null,
+      purchase_year:           isPurchase ? (purchaseInfo.year ? parseInt(purchaseInfo.year) : null) : null,
+      purchase_mileage:        isPurchase ? (purchaseInfo.mileage ? parseInt(purchaseInfo.mileage) : null) : null,
+      purchase_desired_price:  isPurchase ? (purchaseInfo.desired_price ? parseInt(purchaseInfo.desired_price) : null) : null,
+      purchase_chassis_number: isPurchase ? (purchaseInfo.chassis_number || null) : null,
+      purchase_color:          isPurchase ? (purchaseInfo.color || null)          : null,
+      purchase_repair_history: isPurchase ? purchaseInfo.repair_history          : false,
     }]).select().single()
-    if (error) { alert('エラー: ' + error.message); setLoading(false); return }
+    if (error) { alert('エラー: ' + error.message); setLoadingOverlay(false); setLoading(false); return }
+    if (fromInquiry) {
+      await supabase.from('inquiries').update({ status: 'in_progress' }).eq('id', fromInquiry)
+    }
+    setLoadingOverlay(false)
     router.push(`/negotiations/${data.id}`)
   }
 
   const inp = { width: '100%', padding: '9px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box' as const, outline: 'none' }
-  const lbl = { fontSize: '12px', fontWeight: 500, color: '#888', marginBottom: '6px', display: 'block' }
+  const lbl = { fontSize: '12px', fontWeight: 500 as const, color: '#888', marginBottom: '6px', display: 'block' as const }
+
+  const bc = BANNER_CONFIG[inquiryData?.category] ?? BANNER_CONFIG.sales
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '640px', margin: '0 auto' }}>
+    <div style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
+      {loadingOverlay && <LoadingOverlay message={loadingMessage} />}
       <div style={{ marginBottom: '1.5rem' }}>
         <Link href="/negotiations" style={{ fontSize: '13px', color: '#888', textDecoration: 'none' }}>← 商談一覧に戻る</Link>
         <h1 style={{ fontSize: '22px', fontWeight: 700, margin: '8px 0 0' }}>{TITLE_CONFIG[form.category] ?? '商談登録'}</h1>
       </div>
 
-      {fromInquiry && (() => {
-        const bc = BANNER_CONFIG[inquiryCategory] ?? BANNER_CONFIG.sales
-        return (
-          <div style={{ background: bc.bg, border: `1px solid ${bc.border}`, borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '18px' }}>🔗</span>
-            <div>
-              <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: bc.color }}>{bc.label}</p>
-              <p style={{ margin: '2px 0 0', fontSize: '12px', color: bc.subcolor }}>
-                {inquiryCustomerName}
-                {inquiryPhone && <span style={{ marginLeft: '8px', opacity: 0.8 }}>{inquiryPhone}</span>}
-                　※ 顧客が一覧にある場合は自動選択されています
-              </p>
-            </div>
+      {/* 問合せ引き継ぎバナー */}
+      {fromInquiry && inquiryData && (
+        <div style={{ background: bc.bg, border: `1px solid ${bc.border}`, borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '18px' }}>🔗</span>
+          <div>
+            <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: bc.color }}>{bc.label}</p>
+            <p style={{ margin: '2px 0 0', fontSize: '12px', color: bc.sub }}>
+              {inquiryData.customer_name}
+              {inquiryData.phone && <span style={{ marginLeft: '8px', opacity: 0.8 }}>{inquiryData.phone}</span>}
+            </p>
           </div>
-        )
-      })()}
+        </div>
+      )}
 
       <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
 
         {/* 流入経路 */}
-        <div>
-          <label style={lbl}>流入経路</label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+        <div id="source-field">
+          <label style={lbl}>流入経路 <span style={{ color: '#e53e3e' }}>*</span></label>
+          <div style={{
+            display: 'flex', flexWrap: 'wrap', gap: '6px', padding: '10px',
+            border: `1px solid ${sourceError ? '#e53e3e' : form.source ? '#1a73e8' : '#eee'}`,
+            borderRadius: '10px',
+          }}>
             {SOURCES.map(s => (
               <button key={s.value} onClick={() => setForm(f => ({ ...f, source: f.source === s.value ? '' : s.value }))}
                 style={{ padding: '5px 12px', borderRadius: '20px', border: 'none', fontSize: '12px', fontWeight: 500, cursor: 'pointer', background: form.source === s.value ? s.color : s.bg, color: form.source === s.value ? 'white' : s.color }}>
@@ -164,19 +241,22 @@ function NewNegotiationContent() {
               </button>
             ))}
           </div>
+          {sourceError && <p style={{ color: '#e53e3e', fontSize: '12px', marginTop: '4px' }}>必須項目です</p>}
         </div>
 
-        {/* 顧客 */}
-        <div>
-          <label style={lbl}>顧客 *</label>
-          <select value={form.customer_id} onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))} style={inp}>
-            <option value="">顧客を選択してください</option>
-            {customers.map(c => <option key={c.id} value={c.id}>{c.氏名}　{c.電話番号 ?? ''}</option>)}
-          </select>
-          <p style={{ fontSize: '11px', color: '#aaa', marginTop: '4px' }}>
-            未登録の場合は<a href="/customers/new" target="_blank" style={{ color: '#0070f3' }}>顧客登録</a>してから選択してください
-          </p>
-        </div>
+        {/* 顧客（問合せからの引き継ぎ時は非表示） */}
+        {!fromInquiry && (
+          <div>
+            <label style={lbl}>顧客 *</label>
+            <select value={form.customer_id} onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))} style={inp}>
+              <option value="">顧客を選択してください</option>
+              {customers.map(c => <option key={c.id} value={c.id}>{c.氏名}　{c.電話番号 ?? ''}</option>)}
+            </select>
+            <p style={{ fontSize: '11px', color: '#aaa', marginTop: '4px' }}>
+              未登録の場合は<a href="/customers/new" target="_blank" style={{ color: '#0070f3' }}>顧客登録</a>してから選択してください
+            </p>
+          </div>
+        )}
 
         {/* 対象車両 */}
         <div>
@@ -196,22 +276,46 @@ function NewNegotiationContent() {
           </select>
         </div>
 
-        {/* 買取車両情報（仕入商談のみ） */}
+        {/* 買取車両情報（買取商談のみ） */}
         {form.category === 'purchase' && (
-          <div style={{ background: '#f8f9fa', borderRadius: '10px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>買取車両情報</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div style={{ background: '#f0faf4', border: '1px solid #c3e6cb', borderRadius: '10px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: '#1e7e34' }}>買取車両情報</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
               <div>
                 <label style={lbl}>メーカー</label>
-                <input type="text" value={purchaseInfo.maker} onChange={e => setPurchaseInfo(p => ({ ...p, maker: e.target.value }))} placeholder="トヨタ" style={inp} />
+                <select
+                  value={purchaseInfo.maker}
+                  onChange={e => {
+                    const name = e.target.value
+                    const maker = makers.find(m => m.name === name)
+                    setPurchaseMakerId(maker?.id || '')
+                    setFilteredModels(maker ? allModels.filter(m => m.maker_id === maker.id) : [])
+                    setPurchaseInfo(p => ({ ...p, maker: name, model: '' }))
+                  }}
+                  style={inp}>
+                  <option value="">選択してください</option>
+                  {makers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                </select>
               </div>
               <div>
                 <label style={lbl}>車種</label>
-                <input type="text" value={purchaseInfo.model} onChange={e => setPurchaseInfo(p => ({ ...p, model: e.target.value }))} placeholder="アルファード" style={inp} />
+                <select
+                  value={purchaseInfo.model}
+                  onChange={e => setPurchaseInfo(p => ({ ...p, model: e.target.value }))}
+                  disabled={!purchaseMakerId}
+                  style={{ ...inp, background: purchaseMakerId ? 'white' : '#f5f5f5' }}>
+                  <option value="">{purchaseMakerId ? '選択してください' : 'メーカーを先に選択'}</option>
+                  {filteredModels.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                </select>
               </div>
               <div>
                 <label style={lbl}>年式</label>
-                <input type="number" value={purchaseInfo.year} onChange={e => setPurchaseInfo(p => ({ ...p, year: e.target.value }))} placeholder="2020" style={inp} />
+                <select value={purchaseInfo.year} onChange={e => setPurchaseInfo(p => ({ ...p, year: e.target.value }))} style={inp}>
+                  <option value="">選択</option>
+                  {Array.from({ length: 36 }, (_, i) => 2025 - i).map(y => (
+                    <option key={y} value={String(y)}>{y}年</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label style={lbl}>走行距離（km）</label>
@@ -240,8 +344,8 @@ function NewNegotiationContent() {
           </div>
         )}
 
-        {/* 担当者・問合日 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+        {/* 担当者・問合日・来店日（3カラム） */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
           <div>
             <label style={lbl}>担当者</label>
             <select value={form.assigned_to} onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))} style={inp}>
@@ -255,12 +359,10 @@ function NewNegotiationContent() {
             <label style={lbl}>問合日</label>
             <input type="date" value={form.inquiry_date} onChange={e => setForm(f => ({ ...f, inquiry_date: e.target.value }))} style={inp} />
           </div>
-        </div>
-
-        {/* 来店日 */}
-        <div>
-          <label style={lbl}>来店日</label>
-          <input type="date" value={form.visit_date} onChange={e => setForm(f => ({ ...f, visit_date: e.target.value }))} style={inp} />
+          <div>
+            <label style={lbl}>来店日</label>
+            <input type="date" value={form.visit_date} onChange={e => setForm(f => ({ ...f, visit_date: e.target.value }))} style={inp} />
+          </div>
         </div>
 
         {/* 備考 */}
