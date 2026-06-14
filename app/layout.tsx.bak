@@ -57,8 +57,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const hideNav = pathname === '/login'
 
   const [collapsed, setCollapsed] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -67,18 +65,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const inputRef = useRef<HTMLInputElement>(null)
   const timerRef = useRef<any>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth <= 768)
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [])
-
-  // ページ遷移時にモバイルメニューを閉じる
-  useEffect(() => {
-    setMobileMenuOpen(false)
-  }, [pathname])
 
   const search = async (q: string) => {
     const keywords = q.trim().replace(/\s+/g, ' ').split(' ').filter(Boolean)
@@ -159,12 +145,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   const NavLink = ({ href, icon, label }: { href: string; icon: string; label: string }) => {
     const active = pathname === href || (href !== '/' && pathname.startsWith(href))
-    const isCollapsed = !isMobile && collapsed
     return (
       <Link href={href} style={{
         display: 'flex', alignItems: 'center', gap: '10px',
-        padding: isCollapsed ? '9px 0' : '9px 12px',
-        justifyContent: isCollapsed ? 'center' : 'flex-start',
+        padding: collapsed ? '9px 0' : '9px 12px',
+        justifyContent: collapsed ? 'center' : 'flex-start',
         borderRadius: '8px', textDecoration: 'none', marginBottom: '2px',
         background: active ? '#eff6ff' : 'transparent',
         color: active ? '#1a73e8' : '#666',
@@ -173,10 +158,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       }}
       onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#f5f5f5' }}
       onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}
-      title={isCollapsed ? label : undefined}
+      title={collapsed ? label : undefined}
       >
         <i className={`ti ${icon}`} style={{ fontSize: '18px', flexShrink: 0 }} aria-hidden="true" />
-        {!isCollapsed && <span style={{ fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden' }}>{label}</span>}
+        {!collapsed && <span style={{ fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden' }}>{label}</span>}
       </Link>
     )
   }
@@ -211,27 +196,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           position: 'fixed', top: 0, left: 0, right: 0, height: '56px',
           background: 'white', borderBottom: '1px solid #eee',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '0 16px 0 0', zIndex: 1000,
+          padding: '0 20px 0 0', zIndex: 1000,
         }}>
-          {/* 左: ハンバーガー（モバイル）またはロゴエリア（PC） */}
-          {isMobile ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingLeft: '8px' }}>
-              <button
-                onClick={() => setMobileMenuOpen(o => !o)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px', display: 'flex', flexDirection: 'column', gap: '5px' }}
-                aria-label="メニュー"
-              >
-                <span style={{ display: 'block', width: '22px', height: '2px', background: '#555', borderRadius: '2px' }} />
-                <span style={{ display: 'block', width: '22px', height: '2px', background: '#555', borderRadius: '2px' }} />
-                <span style={{ display: 'block', width: '22px', height: '2px', background: '#555', borderRadius: '2px' }} />
-              </button>
-              <Link href="/" style={{ lineHeight: 0 }}><SidebarLogo collapsed={false} /></Link>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '230px', flexShrink: 0 }}>
-              <Link href="/" style={{ lineHeight: 0 }}><SidebarLogo collapsed={false} /></Link>
-            </div>
-          )}
+          {/* 左: ロゴ（サイドバー開閉に関わらず常に展開サイズで固定） */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '230px', flexShrink: 0 }}>
+            <Link href="/" style={{ lineHeight: 0 }}><SidebarLogo collapsed={false} /></Link>
+          </div>
 
           {/* 右: 新規データ入力ドロップダウン */}
           <div ref={dropdownRef} style={{ position: 'relative' }}>
@@ -239,14 +209,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               onClick={() => setDropdownOpen(o => !o)}
               style={{
                 display: 'flex', alignItems: 'center', gap: '6px',
-                padding: isMobile ? '8px 10px' : '8px 16px',
-                background: '#1a73e8', color: 'white',
+                padding: '8px 16px', background: '#1a73e8', color: 'white',
                 border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
                 cursor: 'pointer',
               }}
             >
               <i className="ti ti-plus" style={{ fontSize: '15px' }} />
-              {!isMobile && '新規データ入力'}
+              新規データ入力
             </button>
 
             {dropdownOpen && (
@@ -281,93 +250,71 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
 
-        {/* モバイル: オーバーレイ背景 */}
-        {isMobile && mobileMenuOpen && (
-          <div
-            onClick={() => setMobileMenuOpen(false)}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 150 }}
-          />
-        )}
-
-        {/* サイドバー */}
+        {/* サイドバー（ヘッダー下から開始） */}
         <aside style={{
-          width: isMobile ? '230px' : `${sidebarW}px`,
+          width: `${sidebarW}px`,
           background: 'white', borderRight: '1px solid #eee',
           display: 'flex', flexDirection: 'column',
-          position: 'fixed', top: isMobile ? 0 : '56px', left: 0, bottom: 0,
-          transition: isMobile ? 'transform 0.25s ease' : 'width 0.22s ease',
-          transform: isMobile ? (mobileMenuOpen ? 'translateX(0)' : 'translateX(-100%)') : 'none',
-          overflow: 'hidden', zIndex: 160,
+          position: 'fixed', top: '56px', left: 0, bottom: 0,
+          transition: 'width 0.22s ease', overflow: 'hidden', zIndex: 100,
           flexShrink: 0,
         }}>
-          {/* モバイル時のヘッダー部分 */}
-          {isMobile && (
-            <div style={{ height: '56px', display: 'flex', alignItems: 'center', padding: '0 16px', borderBottom: '1px solid #eee', flexShrink: 0 }}>
-              <Link href="/" style={{ lineHeight: 0 }} onClick={() => setMobileMenuOpen(false)}>
-                <SidebarLogo collapsed={false} />
-              </Link>
-            </div>
-          )}
-
           {/* 検索ボタン */}
           <div style={{ padding: '8px 10px', borderBottom: '1px solid #eee' }}>
-            <button onClick={() => { setSearchOpen(true); setMobileMenuOpen(false) }} style={{
+            <button onClick={() => setSearchOpen(true)} style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: '6px',
-              padding: (!isMobile && collapsed) ? '7px 0' : '7px 10px',
-              justifyContent: (!isMobile && collapsed) ? 'center' : 'flex-start',
+              padding: collapsed ? '7px 0' : '7px 10px', justifyContent: collapsed ? 'center' : 'flex-start',
               background: '#f5f5f5', border: 'none', borderRadius: '8px', cursor: 'pointer',
-            }} title={(!isMobile && collapsed) ? '総合検索' : undefined}>
+            }} title={collapsed ? '総合検索' : undefined}>
               <i className="ti ti-search" style={{ fontSize: '15px', color: '#888', flexShrink: 0 }} aria-hidden="true" />
-              {(isMobile || !collapsed) && <span style={{ fontSize: '12px', color: '#999', whiteSpace: 'nowrap' }}>総合検索...</span>}
+              {!collapsed && <span style={{ fontSize: '12px', color: '#999', whiteSpace: 'nowrap' }}>総合検索...</span>}
             </button>
           </div>
 
           {/* ナビ */}
           <nav style={{ padding: '8px', flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
-            {(isMobile || !collapsed) && <div style={{ fontSize: '10px', color: '#bbb', padding: '6px 8px 4px', fontWeight: 600, letterSpacing: '0.05em' }}>メイン</div>}
+            {!collapsed && <div style={{ fontSize: '10px', color: '#bbb', padding: '6px 8px 4px', fontWeight: 600, letterSpacing: '0.05em' }}>メイン</div>}
             {NAV_ITEMS.map(item => <NavLink key={item.href} {...item} />)}
             <div style={{ height: '8px' }} />
-            {(isMobile || !collapsed) && <div style={{ fontSize: '10px', color: '#bbb', padding: '6px 8px 4px', fontWeight: 600, letterSpacing: '0.05em' }}>管理</div>}
-            {(!isMobile && collapsed) && <div style={{ borderTop: '1px solid #eee', margin: '8px 6px' }} />}
+            {!collapsed && <div style={{ fontSize: '10px', color: '#bbb', padding: '6px 8px 4px', fontWeight: 600, letterSpacing: '0.05em' }}>管理</div>}
+            {collapsed && <div style={{ borderTop: '1px solid #eee', margin: '8px 6px' }} />}
             {NAV_ITEMS2.map(item => <NavLink key={item.href} {...item} />)}
           </nav>
 
           {/* ユーザー */}
-          <div style={{ padding: '10px 12px', borderTop: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: (!isMobile && collapsed) ? 'center' : 'flex-start', gap: '8px' }}>
+          <div style={{ padding: '10px 12px', borderTop: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: '8px' }}>
             <UserMenu />
           </div>
         </aside>
 
-        {/* サイドバー開閉ボタン（PCのみ） */}
-        {!isMobile && (
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            style={{
-              position: 'fixed',
-              left: `${sidebarW - 12}px`,
-              top: '70px',
-              width: '24px',
-              height: '40px',
-              background: 'white',
-              border: '1px solid #ddd',
-              borderLeft: 'none',
-              borderRadius: '0 6px 6px 0',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 110,
-              boxShadow: '2px 0 6px rgba(0,0,0,0.08)',
-              transition: 'left 0.22s ease',
-              padding: 0,
-            }}
-            aria-label="サイドバー切替"
-          >
-            <span style={{ fontSize: '16px', color: '#999', lineHeight: 1, userSelect: 'none' }}>
-              {collapsed ? '›' : '‹'}
-            </span>
-          </button>
-        )}
+        {/* サイドバー開閉ボタン */}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          style={{
+            position: 'fixed',
+            left: `${sidebarW - 12}px`,
+            top: '70px',
+            width: '24px',
+            height: '40px',
+            background: 'white',
+            border: '1px solid #ddd',
+            borderLeft: 'none',
+            borderRadius: '0 6px 6px 0',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 110,
+            boxShadow: '2px 0 6px rgba(0,0,0,0.08)',
+            transition: 'left 0.22s ease',
+            padding: 0,
+          }}
+          aria-label="サイドバー切替"
+        >
+          <span style={{ fontSize: '16px', color: '#999', lineHeight: 1, userSelect: 'none' }}>
+            {collapsed ? '›' : '‹'}
+          </span>
+        </button>
 
         {/* 検索オーバーレイ */}
         {searchOpen && (
@@ -376,8 +323,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {/* 検索パネル */}
         <div style={{
-          position: 'fixed', top: 0, left: 0, height: '100vh',
-          width: isMobile ? '100%' : '400px',
+          position: 'fixed', top: 0, left: 0, height: '100vh', width: '400px',
           background: 'white', zIndex: 201, boxShadow: '4px 0 24px rgba(0,0,0,0.15)',
           transform: searchOpen ? 'translateX(0)' : 'translateX(-100%)',
           transition: 'transform 0.25s ease', display: 'flex', flexDirection: 'column',
@@ -426,12 +372,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </div>
 
         {/* メインコンテンツ */}
-        <main style={{
-          marginLeft: isMobile ? 0 : `${sidebarW}px`,
-          flex: 1, minHeight: '100vh',
-          transition: isMobile ? 'none' : 'margin-left 0.22s ease',
-          paddingTop: '56px',
-        }}>
+        <main style={{ marginLeft: `${sidebarW}px`, flex: 1, minHeight: '100vh', transition: 'margin-left 0.22s ease', paddingTop: '56px' }}>
           {children}
         </main>
       </body>
