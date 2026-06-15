@@ -219,6 +219,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '0 16px 0 0', zIndex: 1000,
         }}>
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '3px', background: 'linear-gradient(to right, #e8622a, #2196f3, #4caf50)' }} />
           {/* 左: ハンバーガー（モバイル）またはロゴエリア（PC） */}
           {isMobile ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingLeft: '8px' }}>
