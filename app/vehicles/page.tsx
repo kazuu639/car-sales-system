@@ -104,9 +104,14 @@ export default function VehiclesPage() {
             {filtered.length}台表示 / 全{vehicles.length}台
           </p>
         </div>
-        <Link href="/vehicles/new" style={{ padding: '10px 20px', background: '#0070f3', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
-          ＋ 車両登録
-        </Link>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Link href="/vehicles/import" style={{ padding: '10px 20px', background: '#666', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
+            CSV取込み
+          </Link>
+          <Link href="/vehicles/new" style={{ padding: '10px 20px', background: '#0070f3', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
+            ＋ 車両登録
+          </Link>
+        </div>
       </div>
 
       {/* フィルターバー */}
