@@ -202,6 +202,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     document.documentElement.style.zoom = zoom;
   })();
 ` }} />
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#1a73e8" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="BRAIN BASE" />
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
       </head>
       <body style={{ margin: 0, fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', background: '#f7f8fa', display: 'flex', minHeight: '100vh' }}>
