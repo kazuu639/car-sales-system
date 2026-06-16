@@ -1,7 +1,7 @@
 'use client'
 import React from 'react'
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCurrentUserScope } from '@/lib/supabase'
 import Link from 'next/link'
 
 const STATUS_CONFIG: Record<string, { bg: string; color: string; dot: string }> = {
@@ -53,12 +53,15 @@ export default function VehiclesPage() {
   useEffect(() => {
     const load = async () => {
       setLoading(true)
+      const scope = await getCurrentUserScope()
+      if (!scope) { setLoading(false); return }
       const key = sortVal.startsWith('body_price') ? 'body_price' : 'created_at'
       const asc  = sortVal.endsWith('_asc')
 
       const { data } = await supabase
         .from('vehicles')
         .select('*, master_models(name), master_makers(name), master_colors(name)')
+        .eq('company_id', scope.company_id)
         .is('deleted_at', null)
         .order(key, { ascending: asc })
 
