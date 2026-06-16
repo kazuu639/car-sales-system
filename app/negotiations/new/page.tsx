@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCurrentUserScope } from '@/lib/supabase'
 import Link from 'next/link'
 import LoadingOverlay from '@/components/LoadingOverlay'
 
@@ -168,6 +168,8 @@ function NewNegotiationContent() {
     setLoadingMessage('登録中...')
     setLoadingOverlay(true)
     setLoading(true)
+    const scope = await getCurrentUserScope()
+    if (!scope) { alert('ログイン情報の取得に失敗しました'); setLoadingOverlay(false); setLoading(false); return }
     const isPurchase = form.category === 'purchase'
     const { data, error } = await supabase.from('negotiations').insert([{
       customer_id:             form.customer_id  || null,
@@ -179,7 +181,8 @@ function NewNegotiationContent() {
       notes:                   form.notes        || null,
       category:                form.category     || null,
       status:                  '商談中',
-      company_id:              '00000000-0000-0000-0000-000000000001',
+      company_id:              scope.company_id,
+      branch_id:               scope.branch_id,
       purchase_maker:          isPurchase ? (purchaseInfo.maker || null)          : null,
       purchase_model:          isPurchase ? (purchaseInfo.model || null)          : null,
       purchase_year:           isPurchase ? (purchaseInfo.year ? parseInt(purchaseInfo.year) : null) : null,

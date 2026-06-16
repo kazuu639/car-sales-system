@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCurrentUserScope } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import LoadingOverlay from '@/components/LoadingOverlay'
 
@@ -92,8 +92,17 @@ export default function NewVehiclePage() {
     setLoadingMessage('登録中...')
     setLoadingOverlay(true)
     setLoading(true)
+    const scope = await getCurrentUserScope()
+    if (!scope) {
+      alert('ログイン情報の取得に失敗しました')
+      setLoadingOverlay(false)
+      setLoading(false)
+      return
+    }
     const { data: vehicle, error } = await supabase.from('vehicles').insert([{
       db_number: form.db_number,
+      company_id: scope.company_id,
+      branch_id: scope.branch_id,
       country_id: form.country_id || null,
       maker_id: form.maker_id || null,
       model_id: form.model_id || null,

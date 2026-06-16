@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCurrentUserScope } from '@/lib/supabase'
 import Link from 'next/link'
 import LoadingOverlay from '@/components/LoadingOverlay'
 
@@ -132,6 +132,9 @@ function NewInquiryContent() {
     setLoadingOverlay(true)
     setLoading(true)
 
+    const scope = await getCurrentUserScope()
+    if (!scope) { alert('ログイン情報の取得に失敗しました'); setLoadingOverlay(false); setLoading(false); return }
+
     // 顧客処理
     let customerId: string | null = null
     let customerName = ''
@@ -153,7 +156,8 @@ function NewInquiryContent() {
           電話番号:   newCustomer.電話番号 || null,
           住所:       newCustomer.都道府県 || null,
           メール:     newCustomer.メール   || null,
-          company_id: '00000000-0000-0000-0000-000000000001',
+          company_id: scope.company_id,
+          branch_id:  scope.branch_id,
         }])
         .select()
         .single()
@@ -178,7 +182,8 @@ function NewInquiryContent() {
       category:      form.category,
       visit_date:    form.visit_date || null,
       visited:       form.visited,
-      company_id:    '00000000-0000-0000-0000-000000000001',
+      company_id:    scope.company_id,
+      branch_id:     scope.branch_id,
     }
 
     if (form.category === 'purchase') {

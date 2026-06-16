@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCurrentUserScope } from '@/lib/supabase'
 import Link from 'next/link'
 import LoadingOverlay from '@/components/LoadingOverlay'
 
@@ -41,10 +41,13 @@ export default function NewCustomerPage() {
     setLoadingMessage('登録中...')
     setLoadingOverlay(true)
     setLoading(true)
+    const scope = await getCurrentUserScope()
+    if (!scope) { alert('ログイン情報の取得に失敗しました'); setLoadingOverlay(false); setLoading(false); return }
     const { error } = await supabase.from('customers').insert([{
       ...form,
       生年月日: form.生年月日 || null,
-      company_id: '00000000-0000-0000-0000-000000000001',
+      company_id: scope.company_id,
+      branch_id: scope.branch_id,
     }])
     if (error) { alert('エラー: ' + error.message); setLoadingOverlay(false); setLoading(false); return }
     setLoadingOverlay(false)

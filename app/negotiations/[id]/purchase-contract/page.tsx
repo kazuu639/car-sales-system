@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCurrentUserScope } from '@/lib/supabase'
 import Link from 'next/link'
 import { useProfile } from '@/hooks/useProfile'
 import LoadingOverlay from '@/components/LoadingOverlay'
@@ -219,6 +219,8 @@ export default function NegotiationPurchaseContractPage() {
     ])
 
     // 3. vehicles に新規 INSERT
+    const scope = await getCurrentUserScope()
+    if (!scope) { alert('ログイン情報の取得に失敗しました'); setSaving(false); return }
     const { data: newVehicle, error: vehicleError } = await supabase
       .from('vehicles')
       .insert([{
@@ -237,7 +239,8 @@ export default function NegotiationPurchaseContractPage() {
         purchase_staff:        profile?.display_name || null,
         status:                '在庫中',
         customer_id:           negotiation?.customer_id ?? null,
-        company_id:            '00000000-0000-0000-0000-000000000001',
+        company_id:            scope.company_id,
+        branch_id:             scope.branch_id,
       }])
       .select()
       .single()

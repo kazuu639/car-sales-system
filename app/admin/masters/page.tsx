@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCurrentUserScope } from '@/lib/supabase'
 import LoadingOverlay from '@/components/LoadingOverlay'
 
 export default function MastersPage() {
@@ -13,6 +13,7 @@ export default function MastersPage() {
   const [newName, setNewName] = useState('')
   const [selectedCountry, setSelectedCountry] = useState('')
   const [selectedMaker, setSelectedMaker] = useState('')
+  const [scope, setScope] = useState<{ company_id: string | null; branch_id: string | null; is_headquarters_staff: boolean | null } | null>(null)
   const [loading, setLoading] = useState(false)
   const [loadingOverlay, setLoadingOverlay] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState('処理中...')
@@ -30,23 +31,27 @@ export default function MastersPage() {
     setColors(col.data ?? [])
   }
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => {
+    fetchAll()
+    getCurrentUserScope().then(s => setScope(s))
+  }, [])
 
   const handleAdd = async () => {
     if (!newName.trim()) return
     setLoadingMessage('追加中...')
     setLoadingOverlay(true)
     setLoading(true)
+    const companyId = scope?.company_id ?? null
     if (tab === 'countries') {
-      await supabase.from('master_countries').insert({ name: newName, sort_order: countries.length + 1 })
+      await supabase.from('master_countries').insert({ name: newName, sort_order: countries.length + 1, company_id: companyId })
     } else if (tab === 'makers') {
       if (!selectedCountry) { alert('国を選択してください'); setLoadingOverlay(false); setLoading(false); return }
-      await supabase.from('master_makers').insert({ name: newName, country_id: selectedCountry, sort_order: makers.length + 1 })
+      await supabase.from('master_makers').insert({ name: newName, country_id: selectedCountry, sort_order: makers.length + 1, company_id: companyId })
     } else if (tab === 'models') {
       if (!selectedMaker) { alert('メーカーを選択してください'); setLoadingOverlay(false); setLoading(false); return }
-      await supabase.from('master_models').insert({ name: newName, maker_id: selectedMaker, sort_order: models.length + 1 })
+      await supabase.from('master_models').insert({ name: newName, maker_id: selectedMaker, sort_order: models.length + 1, company_id: companyId })
     } else if (tab === 'colors') {
-      await supabase.from('master_colors').insert({ name: newName, sort_order: colors.length + 1 })
+      await supabase.from('master_colors').insert({ name: newName, sort_order: colors.length + 1, company_id: companyId })
     }
     setNewName('')
     await fetchAll()

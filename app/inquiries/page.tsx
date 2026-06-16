@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCurrentUserScope } from '@/lib/supabase'
 import { useProfile } from '@/hooks/useProfile'
 import LoadingOverlay from '@/components/LoadingOverlay'
 
@@ -148,10 +148,13 @@ export default function InquiriesPage() {
     return
   }
   if (!form.customer_name) return alert('お客様名を入力してください')
+  const scope = await getCurrentUserScope()
+  if (!scope) { alert('ログイン情報の取得に失敗しました'); setLoadingOverlay(false); return }
   const payload = {
     ...form,
     visit_date: form.visit_date || null,
-    company_id: '00000000-0000-0000-0000-000000000001',
+    company_id: scope.company_id,
+    branch_id:  scope.branch_id,
     purchase_maker: form.purchase_maker || null,
     purchase_model: form.purchase_model || null,
     purchase_year: form.purchase_year ? parseInt(form.purchase_year) : null,
