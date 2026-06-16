@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCurrentUserScope } from '@/lib/supabase'
 import Link from 'next/link'
 
 const TYPE_CONFIG: Record<string, { bg: string; color: string; dot: string }> = {
@@ -18,8 +18,16 @@ export default function DealersPage() {
   const [filterType, setFilterType] = useState('すべて')
 
   useEffect(() => {
-    supabase.from('dealers').select('*').order('作成日時', { ascending: false })
-      .then(({ data }) => { setDealers(data ?? []); setLoading(false) })
+    const load = async () => {
+      const scope = await getCurrentUserScope()
+      if (!scope) { setLoading(false); return }
+      const { data } = await supabase.from('dealers').select('*')
+        .eq('company_id', scope.company_id)
+        .order('作成日時', { ascending: false })
+      setDealers(data ?? [])
+      setLoading(false)
+    }
+    load()
   }, [])
 
   const filtered = dealers.filter(d => {

@@ -80,19 +80,21 @@ export default function AccountingPage() {
 
   // ─── データ取得 ──────────────────────────────────────────
   const fetchAll = async () => {
+    if (!profile?.company_id) { setLoading(false); return }
     setLoading(true)
     const [accRes, txRes, sumRes, vRes] = await Promise.all([
-      supabase.from('accounts').select('*').eq('is_active', true).order('sort_order'),
+      supabase.from('accounts').select('*').eq('is_active', true).eq('company_id', profile.company_id).order('sort_order'),
       (() => {
         const [y, m] = month.split('-').map(Number)
         const lastDay = new Date(y, m, 0).toISOString().split('T')[0]
         return supabase.from('transactions')
           .select('*')
+          .eq('company_id', profile.company_id)
           .gte('date', month + '-01')
           .lte('date', lastDay)
           .order('created_at', { ascending: false })
       })(),
-      supabase.from('transactions').select('id, account_id, type, amount'),
+      supabase.from('transactions').select('id, account_id, type, amount').eq('company_id', profile.company_id),
       supabase.from('vehicles').select('id, db_number')
         .is('deleted_at', null).order('created_at', { ascending: false }),
     ])
@@ -107,7 +109,7 @@ export default function AccountingPage() {
     setLoading(false)
   }
 
-  useEffect(() => { fetchAll() }, [month])
+  useEffect(() => { if (profile?.company_id) fetchAll() }, [month, profile])
 
   // ─── 残高計算（全期間） ─────────────────────────────────
   const accountBalance = (acc: Account) => {
@@ -167,6 +169,7 @@ export default function AccountingPage() {
       bank_name: accForm.bank_name || null,
       balance: parseInt(accForm.balance) || 0,
       is_active: true, sort_order: maxOrder + 1,
+      company_id: profile?.company_id ?? null,
     })
     setShowAccModal(false)
     setAccForm({ name: '', type: 'bank', bank_name: '', balance: '0' })

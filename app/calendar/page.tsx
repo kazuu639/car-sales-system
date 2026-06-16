@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCurrentUserScope } from '@/lib/supabase'
 import LoadingOverlay from '@/components/LoadingOverlay'
 
 type CalendarEvent = {
@@ -62,7 +62,10 @@ export default function CalendarPage() {
   const weekScrollRef = useRef<HTMLDivElement>(null)
 
   const fetchEvents = async () => {
+    const scope = await getCurrentUserScope()
+    if (!scope) return
     const { data } = await supabase.from('calendar_events').select('*')
+      .eq('company_id', scope.company_id)
       .order('event_date').order('start_time')
     setEvents(data ?? [])
   }
@@ -116,9 +119,11 @@ export default function CalendarPage() {
     setLoadingOverlay(true)
     if (!form.title) return alert('タイトルを入力してください')
     if (!form.event_date) return alert('日付を入力してください')
+    const scope = await getCurrentUserScope()
+    if (!scope) { alert('ログイン情報の取得に失敗しました'); setLoadingOverlay(false); return }
     const payload = { title: form.title, event_date: form.event_date, start_time: form.start_time || null, end_time: form.end_time || null, event_type: form.event_type, assigned_to: form.assigned_to || null, customer_name: form.customer_name || null, memo: form.memo || null }
     if (editTarget) await supabase.from('calendar_events').update(payload).eq('id', editTarget.id)
-    else await supabase.from('calendar_events').insert(payload)
+    else await supabase.from('calendar_events').insert({ ...payload, company_id: scope.company_id })
     setShowModal(false)
     setLoadingOverlay(false)
     fetchEvents()
