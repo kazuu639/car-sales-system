@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCurrentUserScope } from '@/lib/supabase'
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
 const SOURCES = [
@@ -31,11 +31,13 @@ export default function ReportsPage() {
   useEffect(() => {
     const fetch = async () => {
       setLoading(true)
+      const scope = await getCurrentUserScope()
+      if (!scope) { setLoading(false); return }
       const [v, tx, inq, neg] = await Promise.all([
-        supabase.from('vehicles').select('*, master_makers(name), master_models(name)'),
-        supabase.from('vehicle_transactions').select('*, vehicles(sale_date, contract_date)'),
-        supabase.from('inquiries').select('*'),
-        supabase.from('negotiations').select('*, customers(氏名), vehicles(master_makers(name), master_models(name))'),
+        supabase.from('vehicles').select('*, master_makers(name), master_models(name)').eq('company_id', scope.company_id),
+        supabase.from('transactions').select('*, vehicles(sale_date, contract_date)').eq('company_id', scope.company_id),
+        supabase.from('inquiries').select('*').eq('company_id', scope.company_id),
+        supabase.from('negotiations').select('*, customers(氏名), vehicles(master_makers(name), master_models(name))').eq('company_id', scope.company_id),
       ])
       setVehicles(v.data ?? [])
       setTransactions(tx.data ?? [])
@@ -54,8 +56,8 @@ export default function ReportsPage() {
     const vehicleIds = soldVehicles.map(v => v.id)
 
     const monthTx = transactions.filter(tx => vehicleIds.includes(tx.vehicle_id))
-    const totalIn  = monthTx.filter(t => t.direction === 'in').reduce((s, t) => s + t.amount, 0)
-    const totalOut = monthTx.filter(t => t.direction === 'out').reduce((s, t) => s + t.amount, 0)
+    const totalIn  = monthTx.filter(t => t.type === 'in').reduce((s, t) => s + t.amount, 0)
+    const totalOut = monthTx.filter(t => t.type === 'out').reduce((s, t) => s + t.amount, 0)
     const grossProfit = totalIn - totalOut
 
     // 車体価格ベースの売上（transactionsがない場合の補完）
