@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCurrentUserScope } from '@/lib/supabase'
 import Link from 'next/link'
 
 type Task = {
@@ -34,10 +34,13 @@ export default function DashboardPage() {
 
   const todayStr = new Date().toISOString().split('T')[0]
 
-  const fetchTasks = async () => {
+  const fetchTasks = async (s?: { company_id: string }) => {
+    const scope = s ?? await getCurrentUserScope()
+    if (!scope) return
     const { data } = await supabase
       .from('tasks')
       .select('*')
+      .eq('company_id', scope.company_id)
       .or(`due_date.eq.${todayStr},due_date.is.null`)
       .order('is_done', { ascending: true })
       .order('created_at', { ascending: false })
@@ -45,30 +48,38 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    Promise.all([
-      supabase.from('vehicles').select('*, master_makers(name), master_models(name)').order('created_at', { ascending: false }),
-      supabase.from('negotiations').select('*, customers!customer_id(氏名), vehicles(master_makers(name), master_models(name))').order('created_at', { ascending: false }).limit(5),
-      supabase.from('deliveries').select('*, contracts(*, negotiations(*, customers(氏名), vehicles(master_makers(name), master_models(name))))').order('created_at', { ascending: false }).limit(5),
-      supabase.from('inquiries').select('*').eq('status', 'new').order('created_at', { ascending: false }).limit(5),
-    ]).then(([v, n, d, i]) => {
+    const load = async () => {
+      const scope = await getCurrentUserScope()
+      if (!scope) { setLoading(false); return }
+      const [v, n, d, i] = await Promise.all([
+        supabase.from('vehicles').select('*, master_makers(name), master_models(name)').eq('company_id', scope.company_id).order('created_at', { ascending: false }),
+        supabase.from('negotiations').select('*, customers!customer_id(氏名), vehicles(master_makers(name), master_models(name))').eq('company_id', scope.company_id).order('created_at', { ascending: false }).limit(5),
+        supabase.from('deliveries').select('*, contracts(*, negotiations(*, customers(氏名), vehicles(master_makers(name), master_models(name))))').eq('company_id', scope.company_id).order('created_at', { ascending: false }).limit(5),
+        supabase.from('inquiries').select('*').eq('company_id', scope.company_id).eq('status', 'new').order('created_at', { ascending: false }).limit(5),
+      ])
       setVehicles(v.data ?? [])
       setNegotiations(n.data ?? [])
       setDeliveries(d.data ?? [])
       setInquiries(i.data ?? [])
       setLoading(false)
-    })
-    fetchTasks()
+      fetchTasks(scope)
+    }
+    load()
   }, [])
 
   const addTask = async () => {
     if (!newTask.trim()) return
     setAddingTask(true)
-    await supabase.from('tasks').insert({
-      title: newTask.trim(),
-      due_date: todayStr,
-      is_shared: taskTab === 'shared',
-      is_done: false,
-    })
+    const scope = await getCurrentUserScope()
+    if (scope) {
+      await supabase.from('tasks').insert({
+        title: newTask.trim(),
+        due_date: todayStr,
+        is_shared: taskTab === 'shared',
+        is_done: false,
+        company_id: scope.company_id,
+      })
+    }
     setNewTask('')
     setAddingTask(false)
     fetchTasks()

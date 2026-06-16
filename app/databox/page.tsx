@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
-import { supabase } from '@/lib/supabase'  // ← これに変更
+import { supabase, getCurrentUserScope } from '@/lib/supabase'
 
 type Folder = {
   id: string
@@ -31,17 +31,19 @@ export default function DataBoxPage() {
 
   const fetchData = async () => {
     setLoading(true)
+    const scope = await getCurrentUserScope()
+    if (!scope) { setLoading(false); return }
     if (currentFolder === null) {
       const [{ data: f }, { data: fi }] = await Promise.all([
-        supabase.from('databox_folders').select('*').is('parent_id', null).order('name'),
-        supabase.from('databox_files').select('*').is('folder_id', null).order('name'),
+        supabase.from('databox_folders').select('*').eq('company_id', scope.company_id).is('parent_id', null).order('name'),
+        supabase.from('databox_files').select('*').eq('company_id', scope.company_id).is('folder_id', null).order('name'),
       ])
       setFolders(f || [])
       setFiles(fi || [])
     } else {
       const [{ data: f }, { data: fi }] = await Promise.all([
-        supabase.from('databox_folders').select('*').eq('parent_id', currentFolder).order('name'),
-        supabase.from('databox_files').select('*').eq('folder_id', currentFolder).order('name'),
+        supabase.from('databox_folders').select('*').eq('company_id', scope.company_id).eq('parent_id', currentFolder).order('name'),
+        supabase.from('databox_files').select('*').eq('company_id', scope.company_id).eq('folder_id', currentFolder).order('name'),
       ])
       setFolders(f || [])
       setFiles(fi || [])
@@ -68,7 +70,9 @@ export default function DataBoxPage() {
 
   const createFolder = async () => {
     if (!newFolderName.trim()) return
-    await supabase.from('databox_folders').insert({ name: newFolderName.trim(), parent_id: currentFolder })
+    const scope = await getCurrentUserScope()
+    if (!scope) { alert('ログイン情報の取得に失敗しました'); return }
+    await supabase.from('databox_folders').insert({ name: newFolderName.trim(), parent_id: currentFolder, company_id: scope.company_id })
     setNewFolderName('')
     setShowNewFolder(false)
     fetchData()
@@ -84,6 +88,8 @@ export default function DataBoxPage() {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
+    const scope = await getCurrentUserScope()
+    if (!scope) { alert('ログイン情報の取得に失敗しました'); setUploading(false); return }
     const path = `${currentFolder ?? 'root'}/${Date.now()}_${file.name}`
     const { error } = await supabase.storage.from('databox').upload(path, file)
     if (!error) {
@@ -93,6 +99,7 @@ export default function DataBoxPage() {
         storage_path: path,
         file_size: file.size,
         mime_type: file.type,
+        company_id: scope.company_id,
       })
       fetchData()
     } else {
