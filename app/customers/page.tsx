@@ -8,18 +8,20 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<any[]>([])
   const [loading, setLoading]     = useState(true)
   const [search, setSearch]       = useState('')
-  const { isAdmin } = useProfile()
+  const { isAdmin, profile } = useProfile()
 
   const load = async () => {
+    if (!profile?.company_id) return
     setLoading(true)
     const { data } = await supabase.from('customers').select('*')
+      .eq('company_id', profile.company_id)
       .is('deleted_at', null)
       .order('作成日時', { ascending: false })
     setCustomers(data ?? [])
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { if (profile?.company_id) load() }, [profile])
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`「${name}」を削除BOXに移動しますか？\n関連する商談も削除BOXに移動されます。`)) return
