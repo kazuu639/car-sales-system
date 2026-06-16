@@ -35,21 +35,23 @@ export default function NegotiationsPage() {
   const [filterStatus, setFilterStatus]     = useState('すべて')
   const [filterCategory, setFilterCategory] = useState('purchase')
   const [search, setSearch]                 = useState('')
-  const { isAdmin } = useProfile()
+  const { isAdmin, profile } = useProfile()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const toggleRow = (id: string) => setExpandedId(prev => prev === id ? null : id)
 
   const load = async () => {
+    if (!profile?.company_id) return
     setLoading(true)
     const { data } = await supabase.from('negotiations')
       .select('*, customers(氏名, 電話番号, メール), vehicles(db_number, master_models(name), master_makers(name))')
+      .eq('company_id', profile.company_id)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
     setNegotiations(data ?? [])
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { if (profile?.company_id) load() }, [profile])
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`「${name}」の商談を削除BOXに移動しますか？\n関連する契約・納車情報も移動されます。`)) return
