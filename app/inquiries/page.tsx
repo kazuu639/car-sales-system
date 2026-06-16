@@ -93,9 +93,12 @@ export default function InquiriesPage() {
 
   const fetchInquiries = async () => {
     setLoading(true)
+    const scope = await getCurrentUserScope()
+    if (!scope) { setLoading(false); return }
     const { data } = await supabase
       .from('inquiries')
       .select('*')
+      .eq('company_id', scope.company_id)
       .is('deleted_at', null)
       .order('inquiry_date', { ascending: false })
     setInquiries(data || [])
