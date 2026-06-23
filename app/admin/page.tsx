@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCurrentUserScope } from '@/lib/supabase'
 
 const ROLE_LABEL: any = { admin: '管理者', manager: '店長', staff: 'スタッフ', part: 'バイト・パート' }
 const ROLE_COLOR: any = {
@@ -29,11 +29,14 @@ export default function AdminPage() {
   const [trashTab, setTrashTab] = useState<'vehicles' | 'customers' | 'negotiations'>('vehicles')
 
   const fetchAll = async () => {
+    const scope = await getCurrentUserScope()
+    if (!scope) return
+    const company_id = scope.company_id
     const [p, s, b, v] = await Promise.all([
-      supabase.from('profiles').select('*').order('created_at', { ascending: true }),
-      supabase.from('shop_settings').select('*').single(),
-      supabase.from('document_boxes').select('*, vehicles(db_number, master_makers(name), master_models(name), status)').order('box_number'),
-      supabase.from('vehicles').select('id, status').in('status', ['在庫中', '商談中', '売約済']).is('deleted_at', null),
+      supabase.from('profiles').select('*').eq('company_id', company_id).order('created_at', { ascending: true }),
+      supabase.from('shop_settings').select('*').eq('company_id', company_id).single(),
+      supabase.from('document_boxes').select('*, vehicles(db_number, master_makers(name), master_models(name), status)').eq('company_id', company_id).order('box_number'),
+      supabase.from('vehicles').select('id, status').eq('company_id', company_id).in('status', ['在庫中', '商談中', '売約済']).is('deleted_at', null),
     ])
     setProfiles(p.data ?? [])
     setSettings(s.data)
