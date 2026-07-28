@@ -125,9 +125,10 @@ export default function VehicleDirectoryPage() {
                 const negs = negMap[v.id] ?? []
                 const custMap = new Map<string, any>()
                 negs.forEach((n: any) => { if (n.customers) custMap.set(n.customers.id, n.customers) })
-                const custs  = Array.from(custMap.values())
-                const isOpen = expandedId === v.id
-                const cfg    = STATUS_CONFIG[v.status]
+                const custs   = Array.from(custMap.values())
+                const aaCount = (v.auction_venue_id ? 1 : 0) + (v.purchase_type === '業者AA' && v.dealer_id ? 1 : 0)
+                const isOpen  = expandedId === v.id
+                const cfg     = STATUS_CONFIG[v.status]
 
                 return (
                   <>
@@ -182,12 +183,15 @@ export default function VehicleDirectoryPage() {
 
                       {/* 件数サマリー */}
                       <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'flex', gap: '6px' }}>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                           <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: custs.length > 0 ? '#e8f0fe' : '#f1f3f4', color: custs.length > 0 ? '#1a73e8' : '#aaa', fontWeight: 600 }}>
                             顧客 {custs.length}件
                           </span>
                           <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: negs.length > 0 ? '#e6f4ea' : '#f1f3f4', color: negs.length > 0 ? '#1e7e34' : '#aaa', fontWeight: 600 }}>
                             商談 {negs.length}件
+                          </span>
+                          <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: aaCount > 0 ? '#fff3e0' : '#f1f3f4', color: aaCount > 0 ? '#e65100' : '#aaa', fontWeight: 600 }}>
+                            AA {aaCount}件
                           </span>
                         </div>
                       </td>
