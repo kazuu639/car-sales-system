@@ -26,10 +26,11 @@ const NAV_ITEMS = [
 const NAV_ITEMS2 = [
 { label: '顧客',      href: '/customers',         icon: 'ti-users'       },
 { label: '車両',      href: '/vehicle-directory', icon: 'ti-car-garage'  },
+{ label: '預かり',    href: '/custody',           icon: 'ti-tool'        },
 { label: '業者',      href: '/dealers',           icon: 'ti-building'    },
 { label: 'DATA BOX',  href: '/databox',           icon: 'ti-folder'      },
 { label: 'レポート',  href: '/reports',           icon: 'ti-chart-bar'   },
-{ label: '設定',      href: '/settings',          icon: 'ti-tool'        },
+{ label: '設定',      href: '/settings',          icon: 'ti-settings'    },
 ]
 
 const DROPDOWN_GROUPS = [
@@ -47,8 +48,8 @@ const DROPDOWN_GROUPS = [
     { label: 'ドレスUP', href: '/negotiations/new?category=dresup'     },
   ]},
   { label: '車両', items: [
-    { label: 'AA仕入', href: '/vehicles/new?type=aa'           },
-    { label: '預かり', href: '/vehicles/new?type=consignment'  },
+    { label: 'AA仕入', href: '/vehicles/new?type=aa' },
+    { label: '預かり', href: '/custody/new'          },
   ]},
 ]
 
