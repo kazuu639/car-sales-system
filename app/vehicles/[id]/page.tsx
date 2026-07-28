@@ -586,7 +586,7 @@ export default function VehicleDetailPage() {
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <Link href="/vehicles" style={{ padding: '7px 14px', background: '#f1f3f4', color: '#555', borderRadius: '8px', textDecoration: 'none', fontSize: '13px' }}>← 一覧</Link>
             <button onClick={() => setShowStatusModal(true)} style={{ padding: '7px 14px', background: '#f1f3f4', color: '#555', borderRadius: '8px', border: 'none', fontSize: '13px', cursor: 'pointer', fontWeight: 500 }}>ステータス変更</button>
-            <button onClick={() => { setEditingPurchase(true); setEditForm({ purchase_type: v.purchase_type ?? '', purchase_price: v.purchase_price ?? '', purchase_staff: v.purchase_staff ?? '' }); setTimeout(() => document.getElementById('purchase-info-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }} style={{ padding: '7px 14px', background: '#f1f3f4', color: '#555', borderRadius: '8px', border: 'none', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>仕入情報編集</button>
+            <button onClick={() => { setTab('仕入'); setEditingPurchase(true); setEditForm({ purchase_type: v.purchase_type ?? '', purchase_price: v.purchase_price ?? '', purchase_staff: v.purchase_staff ?? '' }); setTimeout(() => document.getElementById('purchase-info-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100) }} style={{ padding: '7px 14px', background: '#f1f3f4', color: '#555', borderRadius: '8px', border: 'none', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>仕入情報編集</button>
             <Link href={`/vehicles/${v.id}/estimate`} style={{ padding: '7px 14px', background: '#00a86b', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>見積作成</Link>
             <Link href={`/negotiations/new?vehicle=${v.id}`} style={{ padding: '7px 14px', background: '#0070f3', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>販売商談作成</Link>
           </div>
@@ -608,8 +608,7 @@ export default function VehicleDetailPage() {
               {/* 車輌 */}
               <div>
                 {hsec('車輌')}
-                {hcell('車種', [v.master_makers?.name, v.master_models?.name].filter(Boolean).join(' ') || null)}
-                {hcell('車名', v.car_name)}
+                {hcell('車種', v.car_name || [v.master_makers?.name, v.master_models?.name].filter(Boolean).join(' ') || null)}
                 {hcell('グレード', v.grade)}
                 {hcell('年式', v.year ? `${v.year}年` : null)}
                 {hcell('走行距離', v.mileage ? `${v.mileage.toLocaleString()} km` : null)}
