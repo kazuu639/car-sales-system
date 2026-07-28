@@ -597,7 +597,7 @@ export default function VehicleDetailPage() {
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '15px', color: '#555', fontWeight: 700 }}>{v.db_number}</span>
               <span style={{ fontSize: '11px', padding: '2px 10px', borderRadius: '20px', fontWeight: 600, background: STATUS_COLOR[v.status]?.bg ?? '#f1f3f4', color: STATUS_COLOR[v.status]?.color ?? '#555' }}>{v.status}</span>
-              <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '20px', background: '#f1f3f4', color: '#555' }}>{v.purchase_type}</span>
+              <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '20px', background: ['AA','業者AA'].includes(v.purchase_type) ? '#fff3e0' : '#f1f3f4', color: ['AA','業者AA'].includes(v.purchase_type) ? '#e65100' : '#555', fontWeight: 600 }}>{v.purchase_type}</span>
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
