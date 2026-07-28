@@ -24,8 +24,11 @@ export default function CustomerDetailPage() {
   const [customer, setCustomer]       = useState<any>(null)
   const [negotiations, setNegotiations] = useState<any[]>([])
   const [loading, setLoading]         = useState(true)
-  const [openVehicles, setOpenVehicles]   = useState(true)
+  const [openVehicles, setOpenVehicles]       = useState(true)
   const [openNegotiations, setOpenNegotiations] = useState(true)
+  const [editingInfo, setEditingInfo]           = useState(false)
+  const [editForm, setEditForm]                 = useState({ 氏名: '', 氏名カナ: '', 電話番号: '', メール: '', 住所: '', 備考: '' })
+  const [saving, setSaving]                     = useState(false)
 
   useEffect(() => {
     const fetch = async () => {
@@ -40,10 +43,19 @@ export default function CustomerDetailPage() {
       ])
       setCustomer(cRes.data)
       setNegotiations(nRes.data ?? [])
+      if (cRes.data) setEditForm({ 氏名: cRes.data.氏名 ?? '', 氏名カナ: cRes.data.氏名カナ ?? '', 電話番号: cRes.data.電話番号 ?? '', メール: cRes.data.メール ?? '', 住所: cRes.data.住所 ?? '', 備考: cRes.data.備考 ?? '' })
       setLoading(false)
     }
     fetch()
   }, [id])
+
+  const handleSave = async () => {
+    setSaving(true)
+    await supabase.from('customers').update({ ...editForm }).eq('id', id as string)
+    setCustomer((c: any) => ({ ...c, ...editForm }))
+    setEditingInfo(false)
+    setSaving(false)
+  }
 
   if (loading) return <div style={{ padding: '2rem', color: '#aaa' }}>読み込み中...</div>
   if (!customer) return <div style={{ padding: '2rem', color: '#aaa' }}>顧客が見つかりません</div>
@@ -91,15 +103,59 @@ export default function CustomerDetailPage() {
 
       {/* 基本情報 */}
       <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', padding: '20px', marginBottom: '16px' }}>
-        <h2 style={{ fontSize: '14px', fontWeight: 700, color: '#555', margin: '0 0 12px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>基本情報</h2>
-        {row('電話番号', customer.電話番号)}
-        {row('メール', customer.メール)}
-        {row('住所', customer.住所)}
-        {row('登録日', customer.作成日時 ? new Date(customer.作成日時).toLocaleDateString('ja-JP') : null)}
-        {customer.備考 && (
-          <div style={{ marginTop: '12px', padding: '10px 14px', background: '#f8f9fa', borderRadius: '8px', fontSize: '13px', color: '#555', lineHeight: 1.7 }}>
-            {customer.備考}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+          <h2 style={{ fontSize: '14px', fontWeight: 700, color: '#555', margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase' }}>基本情報</h2>
+          {!editingInfo && (
+            <button onClick={() => setEditingInfo(true)}
+              style={{ padding: '5px 14px', background: '#f1f3f4', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#555', fontWeight: 500 }}>
+              編集
+            </button>
+          )}
+        </div>
+
+        {editingInfo ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {([
+              { label: '氏名', key: '氏名', placeholder: '山田 太郎' },
+              { label: '氏名カナ', key: '氏名カナ', placeholder: 'ヤマダ タロウ' },
+              { label: '電話番号', key: '電話番号', placeholder: '090-0000-0000' },
+              { label: 'メール', key: 'メール', placeholder: 'example@mail.com' },
+              { label: '住所', key: '住所', placeholder: '東京都...' },
+            ] as const).map(({ label, key, placeholder }) => (
+              <div key={key} style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <span style={{ width: '80px', flexShrink: 0, fontSize: '12px', color: '#999', fontWeight: 500 }}>{label}</span>
+                <input value={editForm[key]} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
+                  placeholder={placeholder}
+                  style={{ flex: 1, padding: '7px 10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', outline: 'none' }} />
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+              <span style={{ width: '80px', flexShrink: 0, fontSize: '12px', color: '#999', fontWeight: 500, paddingTop: '8px' }}>備考</span>
+              <textarea value={editForm.備考} onChange={e => setEditForm(f => ({ ...f, 備考: e.target.value }))}
+                rows={3} style={{ flex: 1, padding: '7px 10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', resize: 'vertical', outline: 'none' }} />
+            </div>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
+              <button onClick={() => setEditingInfo(false)} style={{ padding: '7px 16px', background: 'white', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', color: '#555' }}>
+                キャンセル
+              </button>
+              <button onClick={handleSave} disabled={saving}
+                style={{ padding: '7px 20px', background: '#0070f3', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+                {saving ? '保存中...' : '保存'}
+              </button>
+            </div>
           </div>
+        ) : (
+          <>
+            {row('電話番号', customer.電話番号)}
+            {row('メール', customer.メール)}
+            {row('住所', customer.住所)}
+            {row('登録日', customer.作成日時 ? new Date(customer.作成日時).toLocaleDateString('ja-JP') : null)}
+            {customer.備考 && (
+              <div style={{ marginTop: '12px', padding: '10px 14px', background: '#f8f9fa', borderRadius: '8px', fontSize: '13px', color: '#555', lineHeight: 1.7 }}>
+                {customer.備考}
+              </div>
+            )}
+          </>
         )}
       </div>
 
