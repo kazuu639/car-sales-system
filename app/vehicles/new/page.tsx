@@ -318,10 +318,6 @@ export default function NewVehiclePage() {
               <input type="number" name="purchase_price" value={form.purchase_price} onChange={handleChange} style={inp} placeholder="0" />
             </div>
             <div>
-              <label style={lbl}>車体価格（円）</label>
-              <input type="number" name="body_price" value={form.body_price} onChange={handleChange} style={inp} placeholder="0" />
-            </div>
-            <div>
               <label style={lbl}>支払総額（円）</label>
               <input type="number" name="total_price" value={form.total_price} onChange={handleChange} style={inp} placeholder="0" />
             </div>
@@ -347,7 +343,6 @@ export default function NewVehiclePage() {
               <div><span style={{ color: '#888' }}>年式：</span>{form.year ? form.year + '年' : '—'}</div>
               <div><span style={{ color: '#888' }}>走行距離：</span>{form.mileage ? parseInt(form.mileage).toLocaleString() + ' km' : '—'}</div>
               <div><span style={{ color: '#888' }}>仕入金額：</span>{form.purchase_price ? '¥' + parseInt(form.purchase_price).toLocaleString() : '—'}</div>
-              <div><span style={{ color: '#888' }}>車体価格：</span>{form.body_price ? '¥' + parseInt(form.body_price).toLocaleString() : '—'}</div>
               <div><span style={{ color: '#888' }}>支払総額：</span>{form.total_price ? '¥' + parseInt(form.total_price).toLocaleString() : '—'}</div>
             </div>
           </div>

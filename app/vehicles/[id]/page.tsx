@@ -350,6 +350,7 @@ export default function VehicleDetailPage() {
       vehicle_use: vehicleSpec.vehicle_use || null,
       stock_notes: vehicleSpec.stock_notes || null,
     }).eq('id', id as string)
+    await fetchVehicle()
     setSpecSaving(false)
     setEditingSpec(false)
   }
@@ -585,6 +586,7 @@ export default function VehicleDetailPage() {
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <Link href="/vehicles" style={{ padding: '7px 14px', background: '#f1f3f4', color: '#555', borderRadius: '8px', textDecoration: 'none', fontSize: '13px' }}>← 一覧</Link>
             <button onClick={() => setShowStatusModal(true)} style={{ padding: '7px 14px', background: '#f1f3f4', color: '#555', borderRadius: '8px', border: 'none', fontSize: '13px', cursor: 'pointer', fontWeight: 500 }}>ステータス変更</button>
+            <button onClick={() => { setEditingPurchase(true); setEditForm({ purchase_type: v.purchase_type ?? '', purchase_price: v.purchase_price ?? '', purchase_staff: v.purchase_staff ?? '' }); setTimeout(() => document.getElementById('purchase-info-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }} style={{ padding: '7px 14px', background: '#f1f3f4', color: '#555', borderRadius: '8px', border: 'none', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>仕入情報編集</button>
             <Link href={`/vehicles/${v.id}/estimate`} style={{ padding: '7px 14px', background: '#00a86b', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>見積作成</Link>
             <Link href={`/negotiations/new?vehicle=${v.id}`} style={{ padding: '7px 14px', background: '#0070f3', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>販売商談作成</Link>
           </div>
@@ -607,6 +609,8 @@ export default function VehicleDetailPage() {
               <div>
                 {hsec('車輌')}
                 {hcell('車種', [v.master_makers?.name, v.master_models?.name].filter(Boolean).join(' ') || null)}
+                {hcell('車名', v.car_name)}
+                {hcell('グレード', v.grade)}
                 {hcell('年式', v.year ? `${v.year}年` : null)}
                 {hcell('走行距離', v.mileage ? `${v.mileage.toLocaleString()} km` : null)}
                 {hcell('車台番号', v.chassis_number)}
@@ -887,7 +891,7 @@ export default function VehicleDetailPage() {
       {/* ===== 仕入タブ ===== */}
       {tab === '仕入' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '16px' }}>
-          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', overflow: 'hidden' }}>
+          <div id="purchase-info-section" style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', overflow: 'hidden' }}>
             <div style={{ background: '#F0FDF4', borderBottom: '1px solid #BBF7D0', padding: '12px 20px', borderRadius: '12px 12px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#14532D', margin: 0 }}>仕入情報</h3>
               {isAdmin && !editingPurchase && (
