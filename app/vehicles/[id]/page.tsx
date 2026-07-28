@@ -159,6 +159,9 @@ export default function VehicleDetailPage() {
   const [deliveryLoading, setDeliveryLoading] = useState(false)
   const [actualDeliveryDate, setActualDeliveryDate] = useState('')
   const [purchaseContract, setPurchaseContract] = useState<any>(null)
+  const [relatedNegotiations, setRelatedNegotiations] = useState<any[]>([])
+  const [openRelatedNeg, setOpenRelatedNeg] = useState(true)
+  const [openRelatedCustomers, setOpenRelatedCustomers] = useState(true)
 
   // ---- データ取得 ----
   const fetchVehicle = async () => {
@@ -251,7 +254,17 @@ export default function VehicleDetailPage() {
     setSalesEstimates(data || [])
   }
 
-  useEffect(() => { fetchVehicle(); fetchTransactions(); fetchDelivery(); fetchPurchaseContract(); fetchAssessmentFromNegotiation(id as string); fetchSalesEstimates(id as string) }, [id])
+  const fetchRelatedNegotiations = async (vid: string) => {
+    const { data } = await supabase
+      .from('negotiations')
+      .select('*, customers(id, 氏名, 電話番号, メール)')
+      .eq('vehicle_id', vid)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+    setRelatedNegotiations(data ?? [])
+  }
+
+  useEffect(() => { fetchVehicle(); fetchTransactions(); fetchDelivery(); fetchPurchaseContract(); fetchAssessmentFromNegotiation(id as string); fetchSalesEstimates(id as string); fetchRelatedNegotiations(id as string) }, [id])
 
   useEffect(() => {
     if (v) {
@@ -2032,6 +2045,120 @@ export default function VehicleDetailPage() {
           <div style={{ position: 'absolute', bottom: '20px', color: 'rgba(255,255,255,0.6)', fontSize: '12px' }}>クリックで原寸大表示　ESCで閉じる</div>
         </div>
       )}
+
+      {/* ===== 関連顧客 ===== */}
+      {(() => {
+        const customerMap = new Map<string, any>()
+        relatedNegotiations.forEach(n => { if (n.customers) customerMap.set(n.customers.id, n.customers) })
+        const customers = Array.from(customerMap.values())
+        return (
+          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', marginTop: '16px', overflow: 'hidden' }}>
+            <button onClick={() => setOpenRelatedCustomers(o => !o)} style={{ width: '100%', background: 'none', border: 'none', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '15px', fontWeight: 700, color: '#111' }}>関連顧客</span>
+                <span style={{ fontSize: '12px', background: '#f1f3f4', color: '#666', borderRadius: '12px', padding: '2px 10px', fontWeight: 600 }}>{customers.length}件</span>
+              </div>
+              <span style={{ color: '#aaa', fontSize: '18px' }}>{openRelatedCustomers ? '▲' : '▼'}</span>
+            </button>
+            {openRelatedCustomers && (
+              <div style={{ borderTop: '1px solid #f0f0f0' }}>
+                {customers.length === 0 ? (
+                  <div style={{ padding: '24px', textAlign: 'center', color: '#bbb', fontSize: '13px' }}>関連する顧客がいません</div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#f8f9fa' }}>
+                        {['氏名', '電話番号', 'メール', ''].map(h => (
+                          <th key={h} style={{ padding: '9px 16px', textAlign: 'left', fontSize: '11px', color: '#9aa0a6', fontWeight: 600 }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {customers.map(c => (
+                        <tr key={c.id} style={{ borderTop: '1px solid #f4f4f4' }}>
+                          <td style={{ padding: '11px 16px', fontSize: '13px', fontWeight: 600, color: '#111' }}>{c.氏名}</td>
+                          <td style={{ padding: '11px 16px', fontSize: '13px', color: '#555' }}>{c.電話番号 ?? '—'}</td>
+                          <td style={{ padding: '11px 16px', fontSize: '13px', color: '#666' }}>{c.メール ?? '—'}</td>
+                          <td style={{ padding: '11px 16px' }}>
+                            <Link href={`/customers/${c.id}`} style={{ fontSize: '12px', color: '#0070f3', textDecoration: 'none', fontWeight: 500 }}>詳細 →</Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* ===== 関連商談履歴 ===== */}
+      {(() => {
+        const NEG_CATEGORY: Record<string, { label: string; bg: string; color: string }> = {
+          purchase: { label: '買取', bg: '#e6f4ea', color: '#1e7e34' },
+          sales:    { label: '販売', bg: '#e8f0fe', color: '#1a73e8' },
+          other:    { label: 'その他', bg: '#f1f3f4', color: '#5f6368' },
+        }
+        const NEG_STATUS: Record<string, { bg: string; color: string }> = {
+          '商談中': { bg: '#fff3e0', color: '#e65100' },
+          '見積済': { bg: '#e8f0fe', color: '#1a73e8' },
+          '成約':   { bg: '#e6f4ea', color: '#1e7e34' },
+          '失注':   { bg: '#fce8e6', color: '#c62828' },
+        }
+        return (
+          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #eee', marginTop: '16px', overflow: 'hidden' }}>
+            <button onClick={() => setOpenRelatedNeg(o => !o)} style={{ width: '100%', background: 'none', border: 'none', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '15px', fontWeight: 700, color: '#111' }}>関連商談履歴</span>
+                <span style={{ fontSize: '12px', background: '#f1f3f4', color: '#666', borderRadius: '12px', padding: '2px 10px', fontWeight: 600 }}>{relatedNegotiations.length}件</span>
+              </div>
+              <span style={{ color: '#aaa', fontSize: '18px' }}>{openRelatedNeg ? '▲' : '▼'}</span>
+            </button>
+            {openRelatedNeg && (
+              <div style={{ borderTop: '1px solid #f0f0f0' }}>
+                {relatedNegotiations.length === 0 ? (
+                  <div style={{ padding: '24px', textAlign: 'center', color: '#bbb', fontSize: '13px' }}>関連する商談がありません</div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#f8f9fa' }}>
+                        {['区分', '顧客名', 'ステータス', '担当', '登録日', ''].map(h => (
+                          <th key={h} style={{ padding: '9px 16px', textAlign: 'left', fontSize: '11px', color: '#9aa0a6', fontWeight: 600 }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {relatedNegotiations.map(n => {
+                        const cat = NEG_CATEGORY[n.category] ?? NEG_CATEGORY.other
+                        const st  = NEG_STATUS[n.status] ?? { bg: '#f1f3f4', color: '#555' }
+                        return (
+                          <tr key={n.id} style={{ borderTop: '1px solid #f4f4f4' }}>
+                            <td style={{ padding: '10px 16px' }}>
+                              <span style={{ fontSize: '11px', padding: '2px 10px', borderRadius: '12px', background: cat.bg, color: cat.color, fontWeight: 700 }}>{cat.label}</span>
+                            </td>
+                            <td style={{ padding: '10px 16px', fontSize: '13px', fontWeight: 500, color: '#111' }}>{n.customers?.氏名 ?? '—'}</td>
+                            <td style={{ padding: '10px 16px' }}>
+                              <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '12px', background: st.bg, color: st.color, fontWeight: 600 }}>{n.status ?? '—'}</span>
+                            </td>
+                            <td style={{ padding: '10px 16px', fontSize: '12px', color: '#666' }}>{n.assigned_to ?? '—'}</td>
+                            <td style={{ padding: '10px 16px', fontSize: '12px', color: '#aaa', whiteSpace: 'nowrap' }}>
+                              {n.created_at ? new Date(n.created_at).toLocaleDateString('ja-JP') : '—'}
+                            </td>
+                            <td style={{ padding: '10px 16px' }}>
+                              <Link href={`/negotiations/${n.id}`} style={{ fontSize: '12px', color: '#0070f3', textDecoration: 'none', fontWeight: 500 }}>詳細 →</Link>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* 削除ボタン */}
       {isAdmin && (
