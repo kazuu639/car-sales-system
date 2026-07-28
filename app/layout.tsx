@@ -21,12 +21,12 @@ const NAV_ITEMS = [
 { label: '在庫管理',       href: '/vehicles',     icon: 'ti-car'              },
 { label: '納車管理',       href: '/deliveries',   icon: 'ti-truck'            },
 { label: 'カレンダー',     href: '/calendar',     icon: 'ti-calendar'         },
-{ label: '会計',     href: '/accounting', icon: 'ti-cash'     },
+{ label: '会計',           href: '/accounting',   icon: 'ti-cash'             },
+{ label: '預かり',         href: '/custody',      icon: 'ti-tool'             },
 ]
 const NAV_ITEMS2 = [
 { label: '顧客',      href: '/customers',         icon: 'ti-users'       },
 { label: '車両',      href: '/vehicle-directory', icon: 'ti-car-garage'  },
-{ label: '預かり',    href: '/custody',           icon: 'ti-tool'        },
 { label: '業者',      href: '/dealers',           icon: 'ti-building'    },
 { label: 'DATA BOX',  href: '/databox',           icon: 'ti-folder'      },
 { label: 'レポート',  href: '/reports',           icon: 'ti-chart-bar'   },
@@ -331,11 +331,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
           {/* ナビ */}
           <nav style={{ padding: '8px', flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
-            {(isMobile || !collapsed) && <div style={{ fontSize: '10px', color: '#bbb', padding: '6px 8px 4px', fontWeight: 600, letterSpacing: '0.05em' }}>メイン</div>}
+            {(isMobile || !collapsed) && (
+              <div style={{ fontSize: '10px', color: '#888', padding: '6px 8px 4px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>メイン</div>
+            )}
             {NAV_ITEMS.map(item => <NavLink key={item.href} {...item} />)}
-            <div style={{ height: '8px' }} />
-            {(isMobile || !collapsed) && <div style={{ fontSize: '10px', color: '#bbb', padding: '6px 8px 4px', fontWeight: 600, letterSpacing: '0.05em' }}>管理</div>}
-            {(!isMobile && collapsed) && <div style={{ borderTop: '1px solid #eee', margin: '8px 6px' }} />}
+
+            {/* セクション区切り */}
+            {(isMobile || !collapsed) ? (
+              <div style={{ margin: '10px 4px 6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ flex: 1, height: '1px', background: '#e8e8e8' }} />
+                <div style={{ fontSize: '10px', color: '#888', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>管理</div>
+                <div style={{ flex: 1, height: '1px', background: '#e8e8e8' }} />
+              </div>
+            ) : (
+              <div style={{ borderTop: '1px solid #eee', margin: '10px 6px' }} />
+            )}
+
             {NAV_ITEMS2.map(item => <NavLink key={item.href} {...item} />)}
           </nav>
 
