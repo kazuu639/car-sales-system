@@ -43,9 +43,7 @@ const DROPDOWN_GROUPS = [
     { label: '販売商談', href: '/negotiations/new?category=sales' },
   ]},
   { label: 'その他', items: [
-    { label: '車検',     href: '/negotiations/new?category=inspection' },
-    { label: '修理',     href: '/negotiations/new?category=repair'     },
-    { label: 'ドレスUP', href: '/negotiations/new?category=dresup'     },
+    { label: 'その他問い合わせ', href: '/inquiries/new?type=other' },
   ]},
   { label: '車両', items: [
     { label: 'AA仕入', href: '/vehicles/new?type=aa' },

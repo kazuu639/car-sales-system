@@ -9,18 +9,23 @@ const STATUSES = ['受付', '作業中', '完了', '引渡済']
 const inp: React.CSSProperties = { width: '100%', padding: '9px 12px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box', outline: 'none' }
 const lbl: React.CSSProperties = { fontSize: '12px', color: '#6b7280', display: 'block', marginBottom: '4px', fontWeight: 500 }
 const sec: React.CSSProperties = { background: 'white', borderRadius: '12px', border: '1px solid #eee', overflow: 'hidden', marginBottom: '16px' }
-const secHead = (bg: string, border: string, color: string, title: string) => (
-  <div style={{ padding: '12px 20px', background: bg, borderBottom: `1px solid ${border}` }}>
-    <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color }}>{title}</h3>
-  </div>
-)
+
+function SecHead({ bg, border, color, title }: { bg: string; border: string; color: string; title: string }) {
+  return (
+    <div style={{ padding: '12px 20px', background: bg, borderBottom: `1px solid ${border}` }}>
+      <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color }}>{title}</h3>
+    </div>
+  )
+}
 
 export default function CustodyNewPage() {
   const router = useRouter()
-  const [saving, setSaving] = useState(false)
-  const [ownerType, setOwnerType] = useState<'customer' | 'dealer'>('customer')
-  const [customers, setCustomers] = useState<any[]>([])
-  const [dealers, setDealers]     = useState<any[]>([])
+  const [saving, setSaving]           = useState(false)
+  const [ownerType, setOwnerType]     = useState<'customer' | 'dealer'>('customer')
+  const [customers, setCustomers]     = useState<any[]>([])
+  const [dealers, setDealers]         = useState<any[]>([])
+  const [ownerVehicles, setOwnerVehicles] = useState<any[]>([])
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string>('') // '' = 未選択, 'new' = 手入力
 
   const [form, setForm] = useState({
     customer_id: '', dealer_id: '',
@@ -47,7 +52,61 @@ export default function CustodyNewPage() {
     load()
   }, [])
 
+  // オーナー変更時に紐付き車両を取得
+  const handleOwnerChange = async (type: 'customer' | 'dealer', ownerId: string) => {
+    setForm(f => ({ ...f, customer_id: type === 'customer' ? ownerId : '', dealer_id: type === 'dealer' ? ownerId : '' }))
+    setSelectedVehicleId('')
+    setOwnerVehicles([])
+    if (!ownerId) return
+
+    let vehicles: any[] = []
+    if (type === 'customer') {
+      // 顧客の商談に紐づく車両を取得
+      const { data: negs } = await supabase
+        .from('negotiations')
+        .select('vehicles(id, car_name, grade, chassis_number, car_number, year, mileage, color, master_models(name))')
+        .eq('customer_id', ownerId)
+        .is('deleted_at', null)
+      const seen = new Set<string>()
+      for (const n of (negs ?? [])) {
+        const v = (n as any).vehicles
+        if (v && !seen.has(v.id)) { seen.add(v.id); vehicles.push(v) }
+      }
+    } else {
+      // 業者に紐づく仕入車両を取得
+      const { data: vList } = await supabase
+        .from('vehicles')
+        .select('id, car_name, grade, chassis_number, car_number, year, mileage, color, master_models(name)')
+        .eq('dealer_id', ownerId)
+        .is('deleted_at', null)
+      vehicles = vList ?? []
+    }
+    setOwnerVehicles(vehicles)
+  }
+
+  // 車両選択時に手入力欄へ自動入力
+  const handleVehicleSelect = (vid: string) => {
+    setSelectedVehicleId(vid)
+    if (vid === 'new' || vid === '') {
+      setForm(f => ({ ...f, car_name: '', chassis_number: '', car_number: '', year: '', mileage: '', color: '' }))
+      return
+    }
+    const v = ownerVehicles.find(x => x.id === vid)
+    if (!v) return
+    setForm(f => ({
+      ...f,
+      car_name:       v.car_name ?? v.master_models?.name ?? '',
+      chassis_number: v.chassis_number ?? '',
+      car_number:     v.car_number ?? '',
+      year:           v.year ? String(v.year) : '',
+      mileage:        v.mileage ? String(v.mileage) : '',
+      color:          v.color ?? '',
+    }))
+  }
+
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  const showVehicleInputs = selectedVehicleId === 'new' || (ownerVehicles.length === 0 && (form.customer_id || form.dealer_id))
 
   const handleSave = async () => {
     const customerId = ownerType === 'customer' ? form.customer_id : null
@@ -59,10 +118,13 @@ export default function CustodyNewPage() {
     const scope = await getCurrentUserScope()
     if (!scope?.company_id) { alert('ログイン情報の取得に失敗しました'); setSaving(false); return }
 
+    const linkedVehicleId = selectedVehicleId && selectedVehicleId !== 'new' ? selectedVehicleId : null
+
     const { data, error } = await supabase.from('custody').insert({
       company_id:               scope.company_id,
       customer_id:              customerId || null,
       dealer_id:                dealerId   || null,
+      vehicle_id:               linkedVehicleId,
       car_name:                 form.car_name     || null,
       chassis_number:           form.chassis_number || null,
       car_number:               form.car_number   || null,
@@ -81,6 +143,8 @@ export default function CustodyNewPage() {
     router.push(`/custody/${data.id}`)
   }
 
+  const ownerSelected = !!(form.customer_id || form.dealer_id)
+
   return (
     <div style={{ padding: '2rem', maxWidth: '860px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
@@ -88,9 +152,9 @@ export default function CustodyNewPage() {
         <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>新規受付</h1>
       </div>
 
-      {/* 預かり理由（最重要） */}
+      {/* 預かり理由 */}
       <div style={sec}>
-        {secHead('#fff7ed', '#fed7aa', '#c2410c', '預かり理由')}
+        <SecHead bg="#fff7ed" border="#fed7aa" color="#c2410c" title="預かり理由" />
         <div style={{ padding: '20px' }}>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {REASONS.map(r => (
@@ -108,11 +172,11 @@ export default function CustodyNewPage() {
 
       {/* 顧客 / 業者 */}
       <div style={sec}>
-        {secHead('#eff6ff', '#bfdbfe', '#1d4ed8', '顧客 / 業者情報')}
+        <SecHead bg="#eff6ff" border="#bfdbfe" color="#1d4ed8" title="顧客 / 業者情報" />
         <div style={{ padding: '20px' }}>
           <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
             {(['customer', 'dealer'] as const).map(t => (
-              <button key={t} onClick={() => setOwnerType(t)} style={{
+              <button key={t} onClick={() => { setOwnerType(t); setForm(f => ({ ...f, customer_id: '', dealer_id: '' })); setOwnerVehicles([]); setSelectedVehicleId('') }} style={{
                 padding: '7px 20px', borderRadius: '8px', border: '2px solid',
                 fontSize: '13px', fontWeight: 600, cursor: 'pointer',
                 background: ownerType === t ? '#1d4ed8' : 'white',
@@ -124,63 +188,108 @@ export default function CustodyNewPage() {
           {ownerType === 'customer' ? (
             <div>
               <label style={lbl}>顧客 <span style={{ color: '#e53e3e' }}>*</span></label>
-              <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)} style={inp}>
+              <select value={form.customer_id} onChange={e => handleOwnerChange('customer', e.target.value)} style={inp}>
                 <option value="">顧客を選択してください</option>
                 {customers.map(c => <option key={c.id} value={c.id}>{c['氏名']}{c['電話番号'] ? `　${c['電話番号']}` : ''}</option>)}
               </select>
               <div style={{ marginTop: '8px', fontSize: '12px', color: '#888' }}>
-                顧客が未登録の場合は先に<a href="/customers/new" target="_blank" style={{ color: '#0070f3' }}>顧客登録</a>してください
+                未登録の場合は先に<a href="/customers/new" target="_blank" style={{ color: '#0070f3' }}>顧客登録</a>してください
               </div>
             </div>
           ) : (
             <div>
               <label style={lbl}>業者 <span style={{ color: '#e53e3e' }}>*</span></label>
-              <select value={form.dealer_id} onChange={e => set('dealer_id', e.target.value)} style={inp}>
+              <select value={form.dealer_id} onChange={e => handleOwnerChange('dealer', e.target.value)} style={inp}>
                 <option value="">業者を選択してください</option>
                 {dealers.map(d => <option key={d.id} value={d.id}>{d['業者名']}{d['担当者名'] ? `　${d['担当者名']}` : ''}</option>)}
               </select>
               <div style={{ marginTop: '8px', fontSize: '12px', color: '#888' }}>
-                業者が未登録の場合は先に<a href="/dealers/new" target="_blank" style={{ color: '#0070f3' }}>業者登録</a>してください
+                未登録の場合は先に<a href="/dealers/new" target="_blank" style={{ color: '#0070f3' }}>業者登録</a>してください
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* 車両情報 */}
-      <div style={sec}>
-        {secHead('#f0fdf4', '#bbf7d0', '#15803d', '車両情報')}
-        <div style={{ padding: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-          <div style={{ gridColumn: '1 / -1' }}>
-            <label style={lbl}>車種名</label>
-            <input value={form.car_name} onChange={e => set('car_name', e.target.value)} placeholder="例：ホンダ フィット" style={inp} />
-          </div>
-          <div>
-            <label style={lbl}>車体番号</label>
-            <input value={form.chassis_number} onChange={e => set('chassis_number', e.target.value)} placeholder="例：GK3-1234567" style={inp} />
-          </div>
-          <div>
-            <label style={lbl}>車両ナンバー</label>
-            <input value={form.car_number} onChange={e => set('car_number', e.target.value)} placeholder="例：品川330あ1234" style={inp} />
-          </div>
-          <div>
-            <label style={lbl}>年式</label>
-            <input type="number" value={form.year} onChange={e => set('year', e.target.value)} placeholder="例：2020" style={inp} />
-          </div>
-          <div>
-            <label style={lbl}>走行距離（km）</label>
-            <input type="number" value={form.mileage} onChange={e => set('mileage', e.target.value)} placeholder="例：35000" style={inp} />
-          </div>
-          <div>
-            <label style={lbl}>色</label>
-            <input value={form.color} onChange={e => set('color', e.target.value)} placeholder="例：パールホワイト" style={inp} />
+      {/* 車両選択（オーナー選択後に表示） */}
+      {ownerSelected && (
+        <div style={sec}>
+          <SecHead bg="#f0fdf4" border="#bbf7d0" color="#15803d" title="車両情報" />
+          <div style={{ padding: '20px' }}>
+
+            {/* 既存車両プルダウン（紐付き車両がある場合） */}
+            {ownerVehicles.length > 0 ? (
+              <div style={{ marginBottom: '16px' }}>
+                <label style={lbl}>車両を選択</label>
+                <select value={selectedVehicleId} onChange={e => handleVehicleSelect(e.target.value)} style={{ ...inp, marginBottom: '4px' }}>
+                  <option value="">— 選択してください —</option>
+                  {ownerVehicles.map(v => {
+                    const name = v.car_name ?? v.master_models?.name ?? '不明'
+                    const sub  = [v.chassis_number, v.year ? v.year + '年' : null].filter(Boolean).join(' · ')
+                    return <option key={v.id} value={v.id}>{name}{sub ? `　${sub}` : ''}</option>
+                  })}
+                  <option value="new">＋ この一覧にない車両（新規入力）</option>
+                </select>
+                {selectedVehicleId && selectedVehicleId !== 'new' && (
+                  <div style={{ marginTop: '8px', padding: '10px 14px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0', fontSize: '12px', color: '#15803d' }}>
+                    ✓ 登録済み車両を選択しました。下記に情報が反映されています。
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ marginBottom: '12px', padding: '10px 14px', background: '#fafafa', borderRadius: '8px', border: '1px solid #eee', fontSize: '12px', color: '#888' }}>
+                この{ownerType === 'customer' ? '顧客' : '業者'}に紐づく登録済み車両が見つかりませんでした。下記に直接入力してください。
+              </div>
+            )}
+
+            {/* 手入力欄：既存車両なし or「新規入力」選択時 */}
+            {(showVehicleInputs || (selectedVehicleId && selectedVehicleId !== 'new')) && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={lbl}>車種名</label>
+                  <input value={form.car_name} onChange={e => set('car_name', e.target.value)} placeholder="例：ホンダ フィット" style={inp}
+                    readOnly={!!(selectedVehicleId && selectedVehicleId !== 'new')}
+                    style={{ ...inp, background: (selectedVehicleId && selectedVehicleId !== 'new') ? '#f9fafb' : 'white' }} />
+                </div>
+                <div>
+                  <label style={lbl}>車体番号</label>
+                  <input value={form.chassis_number} onChange={e => set('chassis_number', e.target.value)} placeholder="例：GK3-1234567"
+                    style={{ ...inp, background: (selectedVehicleId && selectedVehicleId !== 'new') ? '#f9fafb' : 'white' }} />
+                </div>
+                <div>
+                  <label style={lbl}>車両ナンバー</label>
+                  <input value={form.car_number} onChange={e => set('car_number', e.target.value)} placeholder="例：品川330あ1234"
+                    style={{ ...inp, background: (selectedVehicleId && selectedVehicleId !== 'new') ? '#f9fafb' : 'white' }} />
+                </div>
+                <div>
+                  <label style={lbl}>年式</label>
+                  <input type="number" value={form.year} onChange={e => set('year', e.target.value)} placeholder="例：2020"
+                    style={{ ...inp, background: (selectedVehicleId && selectedVehicleId !== 'new') ? '#f9fafb' : 'white' }} />
+                </div>
+                <div>
+                  <label style={lbl}>走行距離（km）</label>
+                  <input type="number" value={form.mileage} onChange={e => set('mileage', e.target.value)} placeholder="例：35000"
+                    style={{ ...inp, background: (selectedVehicleId && selectedVehicleId !== 'new') ? '#f9fafb' : 'white' }} />
+                </div>
+                <div>
+                  <label style={lbl}>色</label>
+                  <input value={form.color} onChange={e => set('color', e.target.value)} placeholder="例：パールホワイト"
+                    style={{ ...inp, background: (selectedVehicleId && selectedVehicleId !== 'new') ? '#f9fafb' : 'white' }} />
+                </div>
+                {selectedVehicleId && selectedVehicleId !== 'new' && (
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <div style={{ fontSize: '11px', color: '#aaa' }}>※ 車両情報は登録済みデータから自動入力されています。預かり登録後に車両詳細ページで編集できます。</div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
-      </div>
+      )}
 
       {/* 受付情報 */}
       <div style={sec}>
-        {secHead('#faf5ff', '#e9d5ff', '#7e22ce', '受付情報')}
+        <SecHead bg="#faf5ff" border="#e9d5ff" color="#7e22ce" title="受付情報" />
         <div style={{ padding: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
           <div>
             <label style={lbl}>ステータス</label>
@@ -205,7 +314,7 @@ export default function CustodyNewPage() {
         </div>
       </div>
 
-      {/* 保存ボタン */}
+      {/* 保存 */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
         <button onClick={() => router.push('/custody')} style={{ padding: '11px 28px', background: 'white', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', cursor: 'pointer' }}>キャンセル</button>
         <button onClick={handleSave} disabled={saving}
