@@ -142,6 +142,7 @@ export default function VehicleDetailPage() {
   const [showStatusModal, setShowStatusModal] = useState(false)
   const [showImageModal, setShowImageModal] = useState(false)
   const [imageModalUrl, setImageModalUrl] = useState('')
+  const [auctionVenues, setAuctionVenues] = useState<any[]>([])
 
   // 契約サブタブ
   const [contractSubTab, setContractSubTab] = useState<'契約情報' | '納車管理'>(() => {
@@ -264,7 +265,10 @@ export default function VehicleDetailPage() {
     setRelatedNegotiations(data ?? [])
   }
 
-  useEffect(() => { fetchVehicle(); fetchTransactions(); fetchDelivery(); fetchPurchaseContract(); fetchAssessmentFromNegotiation(id as string); fetchSalesEstimates(id as string); fetchRelatedNegotiations(id as string) }, [id])
+  useEffect(() => {
+    fetchVehicle(); fetchTransactions(); fetchDelivery(); fetchPurchaseContract(); fetchAssessmentFromNegotiation(id as string); fetchSalesEstimates(id as string); fetchRelatedNegotiations(id as string)
+    supabase.from('auction_venues').select('*').order('作成日時', { ascending: false }).then(({ data }) => setAuctionVenues(data ?? []))
+  }, [id])
 
   useEffect(() => {
     if (v) {
@@ -599,7 +603,7 @@ export default function VehicleDetailPage() {
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <Link href="/vehicles" style={{ padding: '7px 14px', background: '#f1f3f4', color: '#555', borderRadius: '8px', textDecoration: 'none', fontSize: '13px' }}>← 一覧</Link>
             <button onClick={() => setShowStatusModal(true)} style={{ padding: '7px 14px', background: '#f1f3f4', color: '#555', borderRadius: '8px', border: 'none', fontSize: '13px', cursor: 'pointer', fontWeight: 500 }}>ステータス変更</button>
-            <button onClick={() => { setTab('仕入'); setEditingPurchase(true); setEditForm({ purchase_type: v.purchase_type ?? '', purchase_price: v.purchase_price ?? '', purchase_staff: v.purchase_staff ?? '' }); setTimeout(() => document.getElementById('purchase-info-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100) }} style={{ padding: '7px 14px', background: '#f1f3f4', color: '#555', borderRadius: '8px', border: 'none', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>仕入情報編集</button>
+            <button onClick={() => { setTab('仕入'); setEditingPurchase(true); setEditForm({ purchase_type: v.purchase_type ?? '', purchase_price: v.purchase_price ?? '', purchase_staff: v.purchase_staff ?? '', auction_venue_id: v.auction_venue_id ?? '' }); setTimeout(() => document.getElementById('purchase-info-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100) }} style={{ padding: '7px 14px', background: '#f1f3f4', color: '#555', borderRadius: '8px', border: 'none', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>仕入情報編集</button>
             <Link href={`/vehicles/${v.id}/estimate`} style={{ padding: '7px 14px', background: '#00a86b', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>見積作成</Link>
             <Link href={`/negotiations/new?vehicle=${v.id}`} style={{ padding: '7px 14px', background: '#0070f3', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}>販売商談作成</Link>
           </div>
@@ -907,7 +911,7 @@ export default function VehicleDetailPage() {
             <div style={{ background: '#F0FDF4', borderBottom: '1px solid #BBF7D0', padding: '12px 20px', borderRadius: '12px 12px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#14532D', margin: 0 }}>仕入情報</h3>
               {isAdmin && !editingPurchase && (
-                <button onClick={() => { setEditingPurchase(true); setEditForm({ purchase_type: v.purchase_type ?? '', purchase_price: v.purchase_price ?? '', purchase_staff: v.purchase_staff ?? '' }) }}
+                <button onClick={() => { setEditingPurchase(true); setEditForm({ purchase_type: v.purchase_type ?? '', purchase_price: v.purchase_price ?? '', purchase_staff: v.purchase_staff ?? '', auction_venue_id: v.auction_venue_id ?? '' }) }}
                   style={{ padding: '5px 14px', background: '#f1f3f4', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#555', fontWeight: 500 }}>
                   仕入情報を編集
                 </button>
@@ -972,6 +976,16 @@ export default function VehicleDetailPage() {
                     {['買取', 'AA', '業者AA', '業販', '下取'].map(o => <option key={o}>{o}</option>)}
                   </select>
                 </div>
+                {editForm.purchase_type === 'AA' && (
+                  <div>
+                    <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>オークション会場</label>
+                    <select value={editForm.auction_venue_id} onChange={e => setEditForm((f: any) => ({ ...f, auction_venue_id: e.target.value }))}
+                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }}>
+                      <option value="">会場を選択してください</option>
+                      {auctionVenues.map((a: any) => <option key={a.id} value={a.id}>{a.会場名}{a.地域 ? `　${a.地域}` : ''}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '4px' }}>仕入金額（円）</label>
                   <input type="number" value={editForm.purchase_price} onChange={e => setEditForm((f: any) => ({ ...f, purchase_price: e.target.value }))}
@@ -985,9 +999,10 @@ export default function VehicleDetailPage() {
                 <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                   <button onClick={async () => {
                     await updateVehicle({
-                      purchase_type:  editForm.purchase_type  || null,
-                      purchase_price: editForm.purchase_price ? parseInt(editForm.purchase_price) : null,
-                      purchase_staff: editForm.purchase_staff || null,
+                      purchase_type:     editForm.purchase_type  || null,
+                      purchase_price:    editForm.purchase_price ? parseInt(editForm.purchase_price) : null,
+                      purchase_staff:    editForm.purchase_staff || null,
+                      auction_venue_id:  editForm.purchase_type === 'AA' ? (editForm.auction_venue_id || null) : null,
                     })
                     setEditingPurchase(false)
                   }}

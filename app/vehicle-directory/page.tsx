@@ -126,7 +126,7 @@ export default function VehicleDirectoryPage() {
                 const custMap = new Map<string, any>()
                 negs.forEach((n: any) => { if (n.customers) custMap.set(n.customers.id, n.customers) })
                 const custs   = Array.from(custMap.values())
-                const aaCount = (v.purchase_type === 'AA' && v.auction_venue_id ? 1 : 0) + (v.purchase_type === '業者AA' && v.dealer_id ? 1 : 0)
+                const aaCount = (v.purchase_type === 'AA' ? 1 : 0) + (v.purchase_type === '業者AA' ? 1 : 0)
                 const isOpen  = expandedId === v.id
                 const cfg     = STATUS_CONFIG[v.status]
 
