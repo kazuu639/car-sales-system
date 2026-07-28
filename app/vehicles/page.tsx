@@ -80,6 +80,9 @@ export default function VehiclesPage() {
     const matchStatus = filterStatus === 'すべて' || v.status === filterStatus
     const matchMaker  = !filterMaker || v.maker_id === filterMaker
     const matchSearch = !search ||
+      (v.car_name             ?? '').includes(search) ||
+      (v.grade                ?? '').includes(search) ||
+      (v.model_type           ?? '').includes(search) ||
       (v.master_models?.name  ?? '').includes(search) ||
       (v.master_makers?.name  ?? '').includes(search) ||
       (v.db_number            ?? '').includes(search) ||
@@ -226,7 +229,7 @@ export default function VehiclesPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((v: any, i) => {
+              {filtered.map((v: any) => {
                 const isExpanded = expandedId === v.id
                 const cfg = STATUS_CONFIG[v.status]
                 return (
@@ -282,12 +285,15 @@ export default function VehiclesPage() {
 
                       {/* メーカー・車種 */}
                       <td style={{ padding: '10px 8px', overflow: 'hidden' }}>
-                        {v.master_makers?.name && (
+                        {!v.car_name && v.master_makers?.name && (
                           <div style={{ fontSize: '10px', color: '#999', marginBottom: '1px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v.master_makers.name}</div>
                         )}
                         <div style={{ fontSize: '12px', fontWeight: 600, color: '#111', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {v.master_models?.name ?? v.car_name ?? '—'}
+                          {v.car_name ?? v.master_models?.name ?? '—'}
                         </div>
+                        {v.car_name && v.grade && (
+                          <div style={{ fontSize: '10px', color: '#999', marginTop: '1px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v.grade}</div>
+                        )}
                       </td>
 
                       {/* 年式 */}

@@ -26,6 +26,7 @@ export default function NewVehiclePage() {
 
   const [form, setForm] = useState({
     db_number: '', country_id: '', maker_id: '', model_id: '',
+    car_name: '', grade: '', model_type: '',
     year: '', mileage: '', shift: 'AT', color_id: '',
     repair_history: false, inspection_date: '', chassis_number: '', car_number: '',
     stock_date: '', purchase_type: '買取', status: '在庫中',
@@ -106,6 +107,9 @@ export default function NewVehiclePage() {
       country_id: form.country_id || null,
       maker_id: form.maker_id || null,
       model_id: form.model_id || null,
+      car_name: form.car_name || null,
+      grade: form.grade || null,
+      model_type: form.model_type || null,
       year: form.year ? parseInt(form.year) : null,
       mileage: form.mileage ? parseInt(form.mileage) : null,
       shift: form.shift,
@@ -201,11 +205,28 @@ export default function NewVehiclePage() {
               </select>
             </div>
             <div>
-              <label style={lbl}>車種</label>
+              <label style={lbl}>車種（マスタ）</label>
               <select name="model_id" value={form.model_id} onChange={handleChange} style={sel} disabled={!form.maker_id}>
                 <option value="">メーカーを選択してください</option>
                 {filteredModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
+            </div>
+            <div style={{ background: '#f0f7ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: '#1e40af', letterSpacing: '0.05em' }}>車検証情報（任意・優先表示）</div>
+              <div style={grid2}>
+                <div>
+                  <label style={lbl}>車名</label>
+                  <input name="car_name" value={form.car_name} onChange={handleChange} style={inp} placeholder="例：シルビア" />
+                </div>
+                <div>
+                  <label style={lbl}>グレード</label>
+                  <input name="grade" value={form.grade} onChange={handleChange} style={inp} placeholder="例：K's" />
+                </div>
+              </div>
+              <div>
+                <label style={lbl}>型式</label>
+                <input name="model_type" value={form.model_type} onChange={handleChange} style={inp} placeholder="例：S15" />
+              </div>
             </div>
             <div style={grid2}>
               <div>
@@ -340,6 +361,7 @@ export default function NewVehiclePage() {
             </div>
             <div style={{ background: '#f8f9fa', borderRadius: '8px', padding: '1rem', fontSize: '13px', lineHeight: '2' }}>
               <div><span style={{ color: '#888' }}>仕入区分：</span>{form.purchase_type}</div>
+              {form.car_name && <div><span style={{ color: '#888' }}>車名：</span>{form.car_name}{form.grade ? ` ${form.grade}` : ''}{form.model_type ? `（${form.model_type}）` : ''}</div>}
               <div><span style={{ color: '#888' }}>年式：</span>{form.year ? form.year + '年' : '—'}</div>
               <div><span style={{ color: '#888' }}>走行距離：</span>{form.mileage ? parseInt(form.mileage).toLocaleString() + ' km' : '—'}</div>
               <div><span style={{ color: '#888' }}>仕入金額：</span>{form.purchase_price ? '¥' + parseInt(form.purchase_price).toLocaleString() : '—'}</div>
