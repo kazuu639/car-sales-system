@@ -40,21 +40,8 @@ function calcStockDays(stockDate: string | null): number | null {
   return Math.floor((Date.now() - new Date(stockDate).getTime()) / 86400000)
 }
 
-const CAT_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
-  purchase: { label: '買取', bg: '#e6f4ea', color: '#1e7e34' },
-  sales:    { label: '販売', bg: '#e8f0fe', color: '#1a73e8' },
-  other:    { label: 'その他', bg: '#f1f3f4', color: '#5f6368' },
-}
-const NEG_STATUS_CONFIG: Record<string, { bg: string; color: string }> = {
-  '商談中': { bg: '#fff3e0', color: '#e65100' },
-  '見積済': { bg: '#e8f0fe', color: '#1a73e8' },
-  '成約':   { bg: '#e6f4ea', color: '#1e7e34' },
-  '失注':   { bg: '#fce8e6', color: '#c62828' },
-}
-
 export default function VehiclesPage() {
   const [vehicles, setVehicles]     = useState<any[]>([])
-  const [negMap, setNegMap]         = useState<Record<string, any[]>>({})
   const [loading, setLoading]       = useState(true)
   const [filterStatus, setFilterStatus] = useState('すべて')
   const [filterMaker, setFilterMaker]   = useState('')
@@ -71,35 +58,19 @@ export default function VehiclesPage() {
       const key = sortVal.startsWith('body_price') ? 'body_price' : 'created_at'
       const asc  = sortVal.endsWith('_asc')
 
-      const [vRes, nRes] = await Promise.all([
-        supabase
-          .from('vehicles')
-          .select('*, master_models(name), master_makers(name), master_colors(name)')
-          .eq('company_id', scope.company_id)
-          .is('deleted_at', null)
-          .order(key, { ascending: asc }),
-        supabase
-          .from('negotiations')
-          .select('id, vehicle_id, category, status, assigned_to, created_at, customers(*)')
-          .eq('company_id', scope.company_id)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false }),
-      ])
+      const { data } = await supabase
+        .from('vehicles')
+        .select('*, master_models(name), master_makers(name), master_colors(name)')
+        .eq('company_id', scope.company_id)
+        .is('deleted_at', null)
+        .order(key, { ascending: asc })
 
-      setVehicles(vRes.data ?? [])
+      setVehicles(data ?? [])
       const makerSet = new Map()
-      ;(vRes.data ?? []).forEach((v: any) => {
+      ;(data ?? []).forEach((v: any) => {
         if (v.master_makers?.name) makerSet.set(v.maker_id, v.master_makers.name)
       })
       setMakers(Array.from(makerSet.entries()).map(([id, name]) => ({ id, name })))
-
-      const map: Record<string, any[]> = {}
-      for (const n of (nRes.data ?? [])) {
-        if (!n.vehicle_id) continue
-        if (!map[n.vehicle_id]) map[n.vehicle_id] = []
-        map[n.vehicle_id].push(n)
-      }
-      setNegMap(map)
       setLoading(false)
     }
     load()
@@ -147,6 +118,24 @@ export default function VehiclesPage() {
             ＋ 車両登録
           </Link>
         </div>
+      </div>
+
+      {/* 関連ページへのクイックリンク */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+        <Link href="/vehicle-directory" style={{
+          display: 'flex', alignItems: 'center', gap: '6px',
+          padding: '8px 16px', background: 'white', border: '1px solid #e0ecff',
+          borderRadius: '8px', textDecoration: 'none', fontSize: '13px', color: '#1a73e8', fontWeight: 500,
+        }}>
+          🚗 車両×顧客・商談の紐付け確認
+        </Link>
+        <Link href="/customers" style={{
+          display: 'flex', alignItems: 'center', gap: '6px',
+          padding: '8px 16px', background: 'white', border: '1px solid #e0f0e8',
+          borderRadius: '8px', textDecoration: 'none', fontSize: '13px', color: '#1e7e34', fontWeight: 500,
+        }}>
+          👤 顧客一覧
+        </Link>
       </div>
 
       {/* フィルターバー */}
@@ -246,12 +235,11 @@ export default function VehiclesPage() {
               <col style={{ width: '55px' }} />
               <col style={{ width: '90px' }} />
               <col style={{ width: '60px' }} />
-              <col style={{ width: '120px' }} />
               <col style={{ width: '36px' }} />
             </colgroup>
             <thead>
               <tr style={{ background: '#f8f9fa', borderBottom: '2px solid #f0f0f0' }}>
-                {['画像', '管理番号', 'ステータス', '入庫日', 'メーカー・車種', '年式', '走行距離', '色', '車体価格', '在庫日数', '関連', ''].map((h, i) => (
+                {['画像', '管理番号', 'ステータス', '入庫日', 'メーカー・車種', '年式', '走行距離', '色', '車体価格', '在庫日数', ''].map((h, i) => (
                   <th key={i} style={{ padding: '10px 8px', textAlign: 'left', fontSize: '11px', color: '#9aa0a6', fontWeight: 600, letterSpacing: '0.03em', whiteSpace: 'nowrap', overflow: 'hidden' }}>
                     {h}
                   </th>
@@ -358,22 +346,6 @@ export default function VehiclesPage() {
                         )
                       })()}
 
-                      {/* 関連バッジ */}
-                      <td style={{ padding: '10px 8px' }} onClick={e => e.stopPropagation()}>
-                        {(() => {
-                          const negs = negMap[v.id] ?? []
-                          const custMap = new Map()
-                          negs.forEach((n: any) => { if (n.customers) custMap.set(n.customers.id, n.customers) })
-                          const custCount = custMap.size
-                          return (
-                            <div style={{ display: 'flex', gap: '4px', flexDirection: 'column' }}>
-                              <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '10px', background: custCount > 0 ? '#e8f0fe' : '#f1f3f4', color: custCount > 0 ? '#1a73e8' : '#aaa', fontWeight: 600, whiteSpace: 'nowrap' }}>顧客 {custCount}件</span>
-                              <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '10px', background: negs.length > 0 ? '#e6f4ea' : '#f1f3f4', color: negs.length > 0 ? '#1e7e34' : '#aaa', fontWeight: 600, whiteSpace: 'nowrap' }}>商談 {negs.length}件</span>
-                            </div>
-                          )
-                        })()}
-                      </td>
-
                       {/* 展開アイコン */}
                       <td style={{ padding: '10px 0', textAlign: 'center', color: '#ccc', fontSize: '11px' }}>
                         {isExpanded ? '▲' : '▼'}
@@ -383,7 +355,7 @@ export default function VehiclesPage() {
                     {/* アコーディオン */}
                     {isExpanded && (
                       <tr style={{ borderBottom: '1px solid #d0dcf5', background: '#f0f5ff' }}>
-                        <td colSpan={12} style={{ padding: '8px 16px 16px' }}>
+                        <td colSpan={11} style={{ padding: '8px 16px 16px' }}>
                           <div style={{ display: 'flex', gap: '0', boxShadow: '0 4px 12px rgba(0,0,0,0.10)', borderRadius: '10px', background: 'white', overflow: 'hidden' }}>
 
                             {/* 4カラム情報グリッド */}
@@ -460,49 +432,6 @@ export default function VehiclesPage() {
                                 </div>
                               </div>
                             </div>
-
-                            {/* 関連顧客・商談 */}
-                            {(() => {
-                              const negs = negMap[v.id] ?? []
-                              const custMap = new Map<string, any>()
-                              negs.forEach((n: any) => { if (n.customers) custMap.set(n.customers.id, n.customers) })
-                              const custs = Array.from(custMap.values())
-                              return (
-                                <div style={{ width: '260px', flexShrink: 0, borderLeft: '1px solid #eef0f5', padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                  {/* 関連顧客 */}
-                                  <div>
-                                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#bbb', letterSpacing: '0.08em', marginBottom: '6px', textTransform: 'uppercase' }}>関連顧客</div>
-                                    {custs.length === 0 ? (
-                                      <div style={{ fontSize: '11px', color: '#ccc' }}>なし</div>
-                                    ) : custs.map((c: any) => (
-                                      <Link key={c.id} href={`/customers/${c.id}`} onClick={e => e.stopPropagation()} style={{ textDecoration: 'none' }}>
-                                        <div style={{ fontSize: '12px', fontWeight: 600, color: '#1a73e8', marginBottom: '2px' }}>{c['氏名'] ?? '—'}</div>
-                                        {c['電話番号'] && <div style={{ fontSize: '11px', color: '#888' }}>{c['電話番号']}</div>}
-                                      </Link>
-                                    ))}
-                                  </div>
-                                  {/* 関連商談 */}
-                                  <div>
-                                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#bbb', letterSpacing: '0.08em', marginBottom: '6px', textTransform: 'uppercase' }}>関連商談</div>
-                                    {negs.length === 0 ? (
-                                      <div style={{ fontSize: '11px', color: '#ccc' }}>なし</div>
-                                    ) : negs.map((n: any) => {
-                                      const cat = CAT_CONFIG[n.category] ?? CAT_CONFIG.other
-                                      const nsc = NEG_STATUS_CONFIG[n.status] ?? { bg: '#f1f3f4', color: '#5f6368' }
-                                      return (
-                                        <Link key={n.id} href={`/negotiations/${n.id}`} onClick={e => e.stopPropagation()} style={{ textDecoration: 'none', display: 'block', marginBottom: '6px' }}>
-                                          <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-                                            <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '10px', background: cat.bg, color: cat.color, fontWeight: 600 }}>{cat.label}</span>
-                                            <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '10px', background: nsc.bg, color: nsc.color, fontWeight: 600 }}>{n.status}</span>
-                                            {n.customers && <span style={{ fontSize: '11px', color: '#555' }}>{n.customers['氏名']}</span>}
-                                          </div>
-                                        </Link>
-                                      )
-                                    })}
-                                  </div>
-                                </div>
-                              )
-                            })()}
 
                           </div>
                         </td>

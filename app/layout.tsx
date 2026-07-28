@@ -24,11 +24,12 @@ const NAV_ITEMS = [
 { label: '会計',     href: '/accounting', icon: 'ti-cash'     },
 ]
 const NAV_ITEMS2 = [
-{ label: '顧客',      href: '/customers', icon: 'ti-users'       },
-{ label: '業者',      href: '/dealers',   icon: 'ti-building'    },
-{ label: 'DATA BOX',  href: '/databox',   icon: 'ti-folder'      },
-{ label: 'レポート',  href: '/reports',   icon: 'ti-chart-bar'   },
-{ label: '設定', href: '/settings', icon: 'ti-tool' },
+{ label: '顧客',      href: '/customers',         icon: 'ti-users'       },
+{ label: '車両',      href: '/vehicle-directory', icon: 'ti-car-garage'  },
+{ label: '業者',      href: '/dealers',           icon: 'ti-building'    },
+{ label: 'DATA BOX',  href: '/databox',           icon: 'ti-folder'      },
+{ label: 'レポート',  href: '/reports',           icon: 'ti-chart-bar'   },
+{ label: '設定',      href: '/settings',          icon: 'ti-tool'        },
 ]
 
 const DROPDOWN_GROUPS = [
