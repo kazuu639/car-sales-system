@@ -22,11 +22,20 @@ type TxRecord = {
   amount: number; note: string | null; account_id: string | null
 }
 
-const STATUS_COLOR: Record<string, { bg: string; color: string }> = {
-  '在庫中': { bg: '#e6f4ea', color: '#1e7e34' },
-  '商談中': { bg: '#fff3e0', color: '#e65100' },
-  '売約済': { bg: '#e8f0fe', color: '#1a73e8' },
-  '納車済': { bg: '#f1f3f4', color: '#5f6368' },
+const STATUS_COLOR: Record<string, { bg: string; color: string; border: string }> = {
+  '在庫中': { bg: '#e6f4ea', color: '#1e7e34', border: '#a8d5b5' },
+  '商談中': { bg: '#fff3e0', color: '#e65100', border: '#ffcc99' },
+  '売約済': { bg: '#e8f0fe', color: '#1a73e8', border: '#aac4f5' },
+  '納車済': { bg: '#f1f3f4', color: '#5f6368', border: '#d0d3d6' },
+}
+
+const TAB_COLOR: Record<string, { bg: string; color: string; border: string; shadow: string }> = {
+  '仕入': { bg: '#fff7ed', color: '#c2410c', border: '#fed7aa', shadow: '0 2px 6px rgba(194,65,12,0.15)' },
+  '在庫': { bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0', shadow: '0 2px 6px rgba(21,128,61,0.15)'  },
+  '販売': { bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe', shadow: '0 2px 6px rgba(29,78,216,0.15)'  },
+  '契約': { bg: '#faf5ff', color: '#7e22ce', border: '#e9d5ff', shadow: '0 2px 6px rgba(126,34,206,0.15)' },
+  '登録': { bg: '#f0fdfa', color: '#0f766e', border: '#99f6e4', shadow: '0 2px 6px rgba(15,118,110,0.15)' },
+  '財務': { bg: '#fefce8', color: '#a16207', border: '#fde68a', shadow: '0 2px 6px rgba(161,98,7,0.15)'   },
 }
 
 const EQUIPMENT_SECTIONS = [
@@ -596,8 +605,10 @@ export default function VehicleDetailPage() {
             </div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '15px', color: '#555', fontWeight: 700 }}>{v.db_number}</span>
-              <span style={{ fontSize: '11px', padding: '2px 10px', borderRadius: '20px', fontWeight: 600, background: STATUS_COLOR[v.status]?.bg ?? '#f1f3f4', color: STATUS_COLOR[v.status]?.color ?? '#555' }}>{v.status}</span>
-              <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '20px', background: ['AA','業者AA'].includes(v.purchase_type) ? '#fff3e0' : '#f1f3f4', color: ['AA','業者AA'].includes(v.purchase_type) ? '#e65100' : '#555', fontWeight: 600 }}>{v.purchase_type}</span>
+              <span style={{ fontSize: '11px', padding: '2px 10px', borderRadius: '20px', fontWeight: 600, background: STATUS_COLOR[v.status]?.bg ?? '#f1f3f4', color: STATUS_COLOR[v.status]?.color ?? '#555', border: `1px solid ${STATUS_COLOR[v.status]?.border ?? '#ddd'}`, boxShadow: '0 2px 6px rgba(0,0,0,0.12)' }}>{v.status}</span>
+              {v.purchase_type && (
+                <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '20px', fontWeight: 600, background: ['AA','業者AA'].includes(v.purchase_type) ? '#fff3e0' : '#f1f3f4', color: ['AA','業者AA'].includes(v.purchase_type) ? '#e65100' : '#555', border: `1px solid ${['AA','業者AA'].includes(v.purchase_type) ? '#ffcc99' : '#d0d3d6'}`, boxShadow: '0 2px 6px rgba(0,0,0,0.12)' }}>{v.purchase_type}</span>
+              )}
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -891,17 +902,25 @@ export default function VehicleDetailPage() {
       </div>
 
       {/* メインタブ */}
-      <div style={{ display: 'flex', gap: '2px', marginBottom: '16px', background: '#f1f3f4', borderRadius: '10px', padding: '4px', width: 'fit-content' }}>
-        {TABS.map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{
-            padding: '7px 20px', border: 'none', fontSize: '13px', cursor: 'pointer',
-            background: tab === t ? '#E6F1FB' : 'transparent',
-            color: tab === t ? '#0C447C' : '#888',
-            borderBottom: tab === t ? '2px solid #185FA5' : '2px solid transparent',
-            borderRadius: tab === t ? '8px 8px 0 0' : '0',
-            fontWeight: tab === t ? 600 : 400,
-          }}>{t}</button>
-        ))}
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        {TABS.map(t => {
+          const tc = TAB_COLOR[t]
+          const active = tab === t
+          return (
+            <button key={t} onClick={() => setTab(t)} style={{
+              padding: '7px 20px', fontSize: '13px', cursor: 'pointer', fontWeight: active ? 700 : 400,
+              background: active ? tc.bg : 'white',
+              color: active ? tc.color : '#999',
+              border: active ? `1px solid ${tc.border}` : '1px solid #e8e8e8',
+              borderRadius: '8px',
+              boxShadow: active ? tc.shadow : 'none',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { if (!active) { e.currentTarget.style.background = tc.bg; e.currentTarget.style.color = tc.color; e.currentTarget.style.border = `1px solid ${tc.border}` } }}
+            onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'white'; e.currentTarget.style.color = '#999'; e.currentTarget.style.border = '1px solid #e8e8e8' } }}
+            >{t}</button>
+          )
+        })}
       </div>
 
       {/* ===== 仕入タブ ===== */}
