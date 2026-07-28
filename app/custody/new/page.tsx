@@ -247,7 +247,7 @@ export default function CustodyNewPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label style={lbl}>車種名</label>
-                  <input value={form.car_name} onChange={e => set('car_name', e.target.value)} placeholder="例：ホンダ フィット" style={inp}
+                  <input value={form.car_name} onChange={e => set('car_name', e.target.value)} placeholder="例：ホンダ フィット"
                     readOnly={!!(selectedVehicleId && selectedVehicleId !== 'new')}
                     style={{ ...inp, background: (selectedVehicleId && selectedVehicleId !== 'new') ? '#f9fafb' : 'white' }} />
                 </div>
